@@ -1,0 +1,9 @@
+https://pkg.devkitpro.org/packages/switch-bzip2-1.0.8-1-any.pkg.tar.xz
+https://pkg.devkitpro.org/packages/switch-freetype-2.13.3-1-any.pkg.tar.zst
+https://pkg.devkitpro.org/packages/switch-harfbuzz-10.0.1-1-any.pkg.tar.zst
+https://pkg.devkitpro.org/packages/switch-jansson-2.11-3-any.pkg.tar.zst
+https://pkg.devkitpro.org/packages/switch-libjpeg-turbo-2.1.2-2-any.pkg.tar.xz
+https://pkg.devkitpro.org/packages/switch-libpng-1.6.48-1-any.pkg.tar.zst
+https://pkg.devkitpro.org/packages/switch-sdl2-2.28.5-4-any.pkg.tar.zst
+https://pkg.devkitpro.org/packages/switch-sdl2_image-2.0.4-1-any.pkg.tar.xz
+https://pkg.devkitpro.org/packages/switch-sdl2_ttf-2.22.0-2-any.pkg.tar.zst
