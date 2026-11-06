@@ -12,9 +12,10 @@
 
 enum { HUD_OFF = 0, HUD_FPS, HUD_GRAPHS, HUD_FULL, HUD_MODES };
 static const char *const hud_mode_name[HUD_MODES] = { "off", "FPS", "graphs", "full" };
+static const char *const s_hudLabels[HUD_MODES] = { "关闭", "FPS", "图表", "详细" }; /* Display names; hud_mode_name remains the CLI format. */
 static int g_hud = HUD_OFF;
 static Uint64 g_hud_toast = 0;          /* when the "Stats overlay: ..." note was set */
-static char g_hud_toast_text[112] = "";  /* v0.7.11: another note instead (vsync, decoder) */
+static char g_hud_toast_text[512] = "";  /* v0.7.11: another note instead (vsync, decoder) */
 static int g_vsync = 1;                  /* on by default: smooth, no tear (V toggles; off = lower latency) */
 static const char *g_dec_mode = "";      /* v0.7.11: "1 thread" / "2 threads (slow PC)" */
 
@@ -93,7 +94,7 @@ static void hud_toast_mode(void)            /* v0.7.12: the "Stats overlay: ..."
 
 static void hud_toast(const char *text)
 {
-    snprintf(g_hud_toast_text, sizeof(g_hud_toast_text), "%s", text);
+    snprintf(g_hud_toast_text, sizeof(g_hud_toast_text), "%.*s", (int)sftUtf8Prefix(text, sizeof(g_hud_toast_text) - 1), text);
     g_hud_toast = SDL_GetPerformanceCounter();
 }
 
@@ -199,7 +200,7 @@ static void hud_sgraph(SDL_Renderer *ren, int x, int y, int w, int h, const char
 
 static float ui_left_inset720(SDL_Renderer *ren, int W, int H);    /* ui.h: the top-left Controller button */
 
-/* W x H: the picture (the renderer's logical size); conn: "USB" / "Network ..." */
+/* W x H: the picture (the renderer's logical size); conn: "USB" / "网络…" */
 static void hud_draw(SDL_Renderer *ren, int W, int H, const char *conn, const char *rec)
 {
     if (H <= 0 || text_init(ren) != 0) return;    /* the font, if the menu has not loaded it yet */
@@ -218,9 +219,9 @@ static void hud_draw(SDL_Renderer *ren, int W, int H, const char *conn, const ch
     const double since_toast = (double)(now - g_hud_toast) / (double)SDL_GetPerformanceFrequency();
     if (g_hud_toast && since_toast >= 1.5) g_hud_toast = 0;
     if (g_hud_toast) {
-        char t[112];
+        char t[512];
         if (g_hud_toast_text[0]) snprintf(t, sizeof(t), "%s", g_hud_toast_text);
-        else snprintf(t, sizeof(t), "Stats overlay: %s", hud_mode_name[g_hud]);
+        else snprintf(t, sizeof(t), "性能统计：%s", s_hudLabels[g_hud]);
         const int tw = text_width(t, 18, 1) + 44;
         ui_rrect(ren, (w720 - tw) / 2, 646, tw, 40, 20, (SDL_Color){ 22, 25, 31, 235 });
         text_draw(ren, t, w720 / 2, 655, 18, 1, hud_ink, 1);
@@ -229,17 +230,17 @@ static void hud_draw(SDL_Renderer *ren, int W, int H, const char *conn, const ch
     char t[256];
     const SDL_Color fc = hud_fps_colour();
     if (g_hud == HUD_FPS) {
-        snprintf(t, sizeof(t), "%.0f fps", g_hs.have ? g_hs.fps : 0.0);
+        snprintf(t, sizeof(t), "%.0f FPS", g_hs.have ? g_hs.fps : 0.0);
         ui_rrect(ren, ix, 10, text_width(t, 26, 1) + 24, 40, 10, hud_panel);
         hud_text(ren, t, ix + 8, 12, 26, 1, fc, 0);
     } else if (g_hud == HUD_GRAPHS) {
         ui_rrect(ren, ix, 10, 470, 34, 8, hud_panel);
-        snprintf(t, sizeof(t), "%.1f fps   %.1f Mbps   latency %.0f ms", g_hs.fps, g_hs.mbps, g_hs.pc + g_hs.con);
+        snprintf(t, sizeof(t), "%.1f FPS   %.1f Mbps   延迟 %.0f ms", g_hs.fps, g_hs.mbps, g_hs.pc + g_hs.con);
         text_draw(ren, t, ix + 10, 16, 19, 1, fc, 0);
         const float ft[] = { 16.7f, 33.3f };
-        hud_graph(ren, ix, 50, 470, 96, "FRAME TIME", "ms", &h_gap, hud_good, NULL, hud_good, 20.0f, ft, 2, 0, NULL, hud_ink, NULL, hud_ink);
+        hud_graph(ren, ix, 50, 470, 96, "帧时间", "ms", &h_gap, hud_good, NULL, hud_good, 20.0f, ft, 2, 0, NULL, hud_ink, NULL, hud_ink);
         const float lt[] = { 50.0f, 100.0f };
-        hud_graph(ren, ix, 152, 470, 96, "LATENCY", "ms", &h_con, hud_blue, &h_pc, hud_warn, 40.0f, lt, 2, 0, "Switch", hud_blue, "PC", hud_warn);
+        hud_graph(ren, ix, 152, 470, 96, "延迟", "ms", &h_con, hud_blue, &h_pc, hud_warn, 40.0f, lt, 2, 0, "Switch", hud_blue, "PC", hud_warn);
     } else if (g_hud == HUD_FULL) {
         /* numbers on the left, graphs on the right */
         const int lx = ix, ly = 10, lw = 340;
@@ -247,40 +248,40 @@ static void hud_draw(SDL_Renderer *ren, int W, int H, const char *conn, const ch
         int y = ly + 10;
         #define HUD_ROW(name, ...) do { text_draw(ren, name, lx + 12, y, 16, 0, hud_dim, 0); \
             snprintf(t, sizeof(t), __VA_ARGS__); text_draw(ren, t, lx + lw - 12, y, 16, 1, hud_ink, 2); y += 22; } while (0)
-        snprintf(t, sizeof(t), "%.1f fps", g_hs.fps);
+        snprintf(t, sizeof(t), "%.1f FPS", g_hs.fps);
         text_draw(ren, t, lx + 12, y - 2, 30, 1, fc, 0);
         y += 40;
-        HUD_ROW("Picture", "%dx%d H.264", g_hs.w, g_hs.h);
-        HUD_ROW("Connection", "%s", conn);
-        HUD_ROW("Decoded / shown", "%.1f / %.1f fps", g_hs.dec_fps, g_hs.fps);
-        HUD_ROW("Bitrate", "%.1f Mbps", g_hs.mbps);
-        HUD_ROW("Latency, total", "%.1f ms", g_hs.pc + g_hs.con);
-        HUD_ROW("  on the Switch", "%.1f ms", g_hs.con);
-        HUD_ROW("  on this PC", "%.1f ms", g_hs.pc);
-        HUD_ROW("Decode", "%.2f ms (max %.1f)", g_hs.dec_ms, g_hs.dec_max);
-        HUD_ROW("  decoder", "%s", g_dec_mode);
-        HUD_ROW(g_vsync ? "Draw + vsync" : "Draw (vsync off)", "%.1f ms", g_hs.draw_ms);
-        { char ut[64]; up_hud_text(ut, sizeof(ut)); HUD_ROW("Upscaling", "%s", ut); }
-        HUD_ROW("Worst frame gap", "%.1f ms", g_hs.gap_max);
-        HUD_ROW("Frames skipped", "%ld (this second)", g_hs.skipped);
-        HUD_ROW("Packets lost", "%ld", g_hs.lost);
-        HUD_ROW("Keyframes", "%ld", g_hs.keyframes);
-        HUD_ROW("Transfer queue max", "%d", g_hs.qmax);
-        HUD_ROW("Audio", "%.0f KB/s, %.0f ms queued", g_hs.a_kbs, g_hs.a_q);
-        HUD_ROW("Audio underruns", "%ld (resyncs %ld)", g_hs.underruns, g_hs.resyncs);
-        HUD_ROW("Recording", "%s", rec[0] ? rec : "off");
+        HUD_ROW("画面", "%dx%d H.264", g_hs.w, g_hs.h);
+        HUD_ROW("连接方式", "%s", conn);
+        HUD_ROW("解码 / 显示 FPS", "%.1f / %.1f FPS", g_hs.dec_fps, g_hs.fps);
+        HUD_ROW("码率", "%.1f Mbps", g_hs.mbps);
+        HUD_ROW("总延迟", "%.1f ms", g_hs.pc + g_hs.con);
+        HUD_ROW("  Switch 端", "%.1f ms", g_hs.con);
+        HUD_ROW("  电脑端", "%.1f ms", g_hs.pc);
+        HUD_ROW("解码", "%.2f ms（最大 %.1f）", g_hs.dec_ms, g_hs.dec_max);
+        HUD_ROW("  解码器", "%s", g_dec_mode);
+        HUD_ROW(g_vsync ? "绘制 + 垂直同步" : "绘制（垂直同步关闭）", "%.1f ms", g_hs.draw_ms);
+        { char ut[64]; up_hud_text(ut, sizeof(ut)); HUD_ROW("画面放大", "%s", ut); }
+        HUD_ROW("最大帧间隔", "%.1f ms", g_hs.gap_max);
+        HUD_ROW("跳过帧", "%ld（本秒）", g_hs.skipped);
+        HUD_ROW("丢包", "%ld", g_hs.lost);
+        HUD_ROW("关键帧", "%ld", g_hs.keyframes);
+        HUD_ROW("传输队列峰值", "%d", g_hs.qmax);
+        HUD_ROW("音频", "%.0f KB/s，队列 %.0f ms", g_hs.a_kbs, g_hs.a_q);
+        HUD_ROW("音频缓冲不足", "%ld（重同步 %ld 次）", g_hs.underruns, g_hs.resyncs);
+        HUD_ROW("录制", "%s", rec[0] ? rec : "关闭");
         #undef HUD_ROW
         const int gx = lx + lw + 8, gw = 400, gh = 74;
         int gy = 10;
         const float ft[] = { 16.7f, 33.3f };
-        hud_graph(ren, gx, gy, gw, gh, "FRAME TIME", "ms", &h_gap, hud_good, NULL, hud_good, 20.0f, ft, 2, 0, NULL, hud_ink, NULL, hud_ink); gy += gh + 6;
+        hud_graph(ren, gx, gy, gw, gh, "帧时间", "ms", &h_gap, hud_good, NULL, hud_good, 20.0f, ft, 2, 0, NULL, hud_ink, NULL, hud_ink); gy += gh + 6;
         const float lt[] = { 50.0f, 100.0f };
-        hud_graph(ren, gx, gy, gw, gh, "LATENCY", "ms", &h_con, hud_blue, &h_pc, hud_warn, 40.0f, lt, 2, 0, "Switch", hud_blue, "PC", hud_warn); gy += gh + 6;
-        hud_graph(ren, gx, gy, gw, gh, "FRAME SIZE", "KB", &h_kb, hud_blue, NULL, hud_blue, 20.0f, NULL, 0, 1, "keyframe", hud_bad, NULL, hud_ink); gy += gh + 6;
+        hud_graph(ren, gx, gy, gw, gh, "延迟", "ms", &h_con, hud_blue, &h_pc, hud_warn, 40.0f, lt, 2, 0, "Switch", hud_blue, "PC", hud_warn); gy += gh + 6;
+        hud_graph(ren, gx, gy, gw, gh, "帧大小", "KB", &h_kb, hud_blue, NULL, hud_blue, 20.0f, NULL, 0, 1, "关键帧", hud_bad, NULL, hud_ink); gy += gh + 6;
         const float dt[] = { 8.0f, 16.7f };
-        hud_graph(ren, gx, gy, gw, gh, "DECODE TIME", "ms", &h_dec, hud_warn, NULL, hud_warn, 4.0f, dt, 2, 0, NULL, hud_ink, NULL, hud_ink); gy += gh + 6;
-        hud_sgraph(ren, gx, gy, gw, gh, "FPS", "fps", &h_fps_s, hud_good, 30.0f); gy += gh + 6;
-        hud_sgraph(ren, gx, gy, gw, gh, "BITRATE", "Mbps", &h_mbps_s, hud_blue, 5.0f);
+        hud_graph(ren, gx, gy, gw, gh, "解码耗时", "ms", &h_dec, hud_warn, NULL, hud_warn, 4.0f, dt, 2, 0, NULL, hud_ink, NULL, hud_ink); gy += gh + 6;
+        hud_sgraph(ren, gx, gy, gw, gh, "FPS", "FPS", &h_fps_s, hud_good, 30.0f); gy += gh + 6;
+        hud_sgraph(ren, gx, gy, gw, gh, "码率", "Mbps", &h_mbps_s, hud_blue, 5.0f);
     }
 
     SDL_RenderSetScale(ren, sx, sy);

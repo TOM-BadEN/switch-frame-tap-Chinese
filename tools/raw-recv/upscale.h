@@ -19,15 +19,15 @@
 
 #ifdef _WIN32   /* + NVIDIA RTX Video Super Resolution, a Windows driver feature (Direct3D 11) */
 enum { UP_OFF = 0, UP_FSR, UP_NIS, UP_RTX, UP_COUNT };
-static const char *const up_name[UP_COUNT] = { "off", "FSR 1", "NIS", "RTX VSR" };
+static const char *const up_name[UP_COUNT] = { "关闭", "FSR 1", "NIS", "RTX VSR" };
 static const char *const up_key[UP_COUNT] = { "off", "fsr", "nis", "rtx" };
 #elif defined(__APPLE__)
 enum { UP_OFF = 0, UP_FSR, UP_COUNT, UP_NIS = UP_COUNT };
-static const char *const up_name[UP_COUNT] = { "off", "FSR 1" };
+static const char *const up_name[UP_COUNT] = { "关闭", "FSR 1" };
 static const char *const up_key[UP_COUNT] = { "off", "fsr" };
 #else
 enum { UP_OFF = 0, UP_FSR, UP_NIS, UP_COUNT };
-static const char *const up_name[UP_COUNT] = { "off", "FSR 1", "NIS" };
+static const char *const up_name[UP_COUNT] = { "关闭", "FSR 1", "NIS" };
 static const char *const up_key[UP_COUNT] = { "off", "fsr", "nis" };
 #endif
 static int g_upscaler = UP_OFF;          /* the choice (viewer.ini: upscaler=) */
@@ -351,7 +351,7 @@ static GLuint up_shader(GLenum type, const char *const *parts, int n, const char
         char log[2048] = "";
         up_glGetShaderInfoLog(s, sizeof(log), NULL, log);
         fprintf(stderr, "upscaler: the %s shader does not compile:\n%s\n", what, log);
-        snprintf(g_up_note, sizeof(g_up_note), "the %s shader does not compile on this GPU", what);
+        snprintf(g_up_note, sizeof(g_up_note), "当前 GPU 无法编译 %s 着色器", what);
         up_glDeleteShader(s);
         return 0;
     }
@@ -371,7 +371,7 @@ static GLuint up_program(GLuint a, GLuint b)
         char log[2048] = "";
         up_glGetProgramInfoLog(p, sizeof(log), NULL, log);
         fprintf(stderr, "upscaler: a program does not link:\n%s\n", log);
-        snprintf(g_up_note, sizeof(g_up_note), "a shader program does not link on this GPU");
+        snprintf(g_up_note, sizeof(g_up_note), "当前 GPU 无法链接着色器程序");
         return 0;
     }
     return p;
@@ -435,16 +435,16 @@ static int up_init(SDL_Renderer *ren)
     g_up.tried = 1;
     SDL_RendererInfo ri;
     if (SDL_GetRendererInfo(ren, &ri) != 0 || strcmp(ri.name, "opengl") != 0) {
-        snprintf(g_up_note, sizeof(g_up_note), "needs the OpenGL renderer (this one is %s)", ri.name ? ri.name : "?");
+        snprintf(g_up_note, sizeof(g_up_note), "需要 OpenGL 渲染器（当前为 %s）", ri.name ? ri.name : "?");
         return 0;
     }
-#define UP_LOAD(ret, name, args) up_##name = (up_##name##_t)SDL_GL_GetProcAddress(#name); if (!up_##name) { snprintf(g_up_note, sizeof(g_up_note), "OpenGL lacks %s", #name); return 0; }
+#define UP_LOAD(ret, name, args) up_##name = (up_##name##_t)SDL_GL_GetProcAddress(#name); if (!up_##name) { snprintf(g_up_note, sizeof(g_up_note), "OpenGL 缺少 %s", #name); return 0; }
     UP_GL_FUNCS(UP_LOAD)
 #undef UP_LOAD
     GLint maj = 0, min = 0;
     up_glGetIntegerv(GL_MAJOR_VERSION, &maj);
     up_glGetIntegerv(GL_MINOR_VERSION, &min);
-    if (maj * 10 + min < 43) { snprintf(g_up_note, sizeof(g_up_note), "needs OpenGL 4.3 (this driver has %d.%d)", maj, min); return 0; }
+    if (maj * 10 + min < 43) { snprintf(g_up_note, sizeof(g_up_note), "需要 OpenGL 4.3（当前驱动为 %d.%d）", maj, min); return 0; }
 
     up_saved_t sv;
     up_save(&sv);
@@ -517,11 +517,11 @@ static int vsr_init(SDL_Renderer *ren)
     if (g_vsr.tried) return g_vsr.ok;
     g_vsr.tried = 1;
     g_vsr.dev = SDL_RenderGetD3D11Device(ren);      /* NULL unless SDL draws with Direct3D 11 */
-    if (!g_vsr.dev) { snprintf(g_vsr.note, sizeof(g_vsr.note), "needs the Direct3D 11 renderer"); return 0; }
+    if (!g_vsr.dev) { snprintf(g_vsr.note, sizeof(g_vsr.note), "需要 Direct3D 11 渲染器"); return 0; }
     ID3D11Device_GetImmediateContext(g_vsr.dev, &g_vsr.ctx);
     if (FAILED(ID3D11Device_QueryInterface(g_vsr.dev, &up_IID_ID3D11VideoDevice, (void **)&g_vsr.vdev)) ||
         FAILED(ID3D11DeviceContext_QueryInterface(g_vsr.ctx, &up_IID_ID3D11VideoContext, (void **)&g_vsr.vctx))) {
-        snprintf(g_vsr.note, sizeof(g_vsr.note), "this GPU has no Direct3D 11 video processor");
+        snprintf(g_vsr.note, sizeof(g_vsr.note), "当前 GPU 不支持 Direct3D 11 视频处理");
         return 0;
     }
     g_vsr.ok = 1;
@@ -559,7 +559,7 @@ static int vsr_setup(int W, int H, int vw, int vh)
         td.Format = DXGI_FORMAT_NV12; td.SampleDesc.Count = 1;
         td.Usage = D3D11_USAGE_STAGING; td.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         HRESULT hr = ID3D11Device_CreateTexture2D(g_vsr.dev, &td, NULL, &g_vsr.stage);
-        if (FAILED(hr)) return up_skip("failed: upload texture", hr);
+        if (FAILED(hr)) return up_skip("失败：上传纹理", hr);
         g_vsr.in_w = W; g_vsr.in_h = H;
     }
     D3D11_VIDEO_PROCESSOR_CONTENT_DESC cd = {0};
@@ -570,12 +570,12 @@ static int vsr_setup(int W, int H, int vw, int vh)
     cd.OutputWidth = (UINT)vw; cd.OutputHeight = (UINT)vh;
     cd.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
     HRESULT hr = ID3D11VideoDevice_CreateVideoProcessorEnumerator(g_vsr.vdev, &cd, &g_vsr.en);
-    if (FAILED(hr)) return up_skip("failed: processor sizes", hr);
+    if (FAILED(hr)) return up_skip("失败：处理器尺寸", hr);
     hr = ID3D11VideoDevice_CreateVideoProcessor(g_vsr.vdev, g_vsr.en, 0, &g_vsr.vp);
-    if (FAILED(hr)) return up_skip("failed: video processor", hr);
+    if (FAILED(hr)) return up_skip("失败：视频处理器", hr);
     UINT fmt = 0;
     ID3D11VideoProcessorEnumerator_CheckVideoProcessorFormat(g_vsr.en, DXGI_FORMAT_NV12, &fmt);
-    if (!(fmt & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT)) return up_skip("failed: no NV12 input", 0);
+    if (!(fmt & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT)) return up_skip("失败：无 NV12 输入", 0);
     /* the NV12 texture the processor reads: drivers differ in the bind flags
      * they accept for it, so try the usual ones (the first that works is kept) */
     D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC ivd = {0};
@@ -595,7 +595,7 @@ static int vsr_setup(int W, int H, int vw, int vh)
             fprintf(stderr, "upscaler: NV12 input, bind flags 0x%x: %s (0x%08lx)\n", binds[i], SUCCEEDED(hr) ? "ok" : "refused", (unsigned long)hr);
         if (SUCCEEDED(hr)) { g_vsr.bind = i; g_vsr.bind_ok = 1; }
     }
-    if (!g_vsr.iv) return up_skip("failed: input view", hr);
+    if (!g_vsr.iv) return up_skip("失败：输入视图", hr);
     /* the stream: BT.709 limited range in, full-range RGB out */
     D3D11_VIDEO_PROCESSOR_COLOR_SPACE in_cs = {0}, out_cs = {0};
     in_cs.YCbCr_Matrix = 1;
@@ -616,20 +616,20 @@ static int vsr_setup(int W, int H, int vw, int vh)
 
 static int vsr_draw(SDL_Renderer *ren, uint8_t *const data[3], const int linesize[3], int W, int H, int nv12)
 {
-    if (!vsr_init(ren)) return up_skip("unavailable, press U", 0);
+    if (!vsr_init(ren)) return up_skip("不可用，请按 U 切换", 0);
     int ow = 0, oh = 0;
     SDL_GetRendererOutputSize(ren, &ow, &oh);
-    if (W <= 0 || H <= 0 || ow <= 0 || oh <= 0 || (W & 1) || (H & 1)) return up_skip("odd picture size", 0);
+    if (W <= 0 || H <= 0 || ow <= 0 || oh <= 0 || (W & 1) || (H & 1)) return up_skip("画面尺寸非偶数", 0);
     int vw, vh;
     if ((long)ow * H > (long)oh * W) { vh = oh; vw = (int)((long)oh * W / H); } else { vw = ow; vh = (int)((long)ow * H / W); }
     const int cw = UP_CW(W), ch = UP_CH(H);     /* v0.7.16: the part drawn this frame */
-    if (vw <= cw && vh <= ch) return up_skip("window too small", 0);
+    if (vw <= cw && vh <= ch) return up_skip("窗口过小", 0);
     const int vx = (ow - vw) / 2, vy = (oh - vh) / 2;
     if (!vsr_setup(W, H, vw, vh)) return 0;
     /* the planes into NV12 (Y, then U and V interleaved) */
     D3D11_MAPPED_SUBRESOURCE m;
     HRESULT hr = ID3D11DeviceContext_Map(g_vsr.ctx, (ID3D11Resource *)g_vsr.stage, 0, D3D11_MAP_WRITE, 0, &m);
-    if (FAILED(hr)) return up_skip("failed: upload", hr);
+    if (FAILED(hr)) return up_skip("失败：上传", hr);
     uint8_t *dst = (uint8_t *)m.pData;
     for (int y = 0; y < H; y++) memcpy(dst + (size_t)y * m.RowPitch, data[0] + (size_t)y * linesize[0], (size_t)W);
     uint8_t *uv = dst + (size_t)m.RowPitch * H;
@@ -647,11 +647,11 @@ static int vsr_draw(SDL_Renderer *ren, uint8_t *const data[3], const int linesiz
     SDL_RenderFlush(ren);
     ID3D11RenderTargetView *rtv = NULL;
     ID3D11DeviceContext_OMGetRenderTargets(g_vsr.ctx, 1, &rtv, NULL);
-    if (!rtv) return up_skip("failed: no back buffer", 0);
+    if (!rtv) return up_skip("失败：无后台缓冲区", 0);
     ID3D11Resource *bb = NULL;
     ID3D11View_GetResource((ID3D11View *)rtv, &bb);
     ID3D11RenderTargetView_Release(rtv);
-    if (!bb) return up_skip("failed: no back buffer", 0);
+    if (!bb) return up_skip("失败：无后台缓冲区", 0);
     /* the output view is made and let go every frame: holding the back buffer
      * would stop SDL from resizing it */
     D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC ovd = {0};
@@ -659,7 +659,7 @@ static int vsr_draw(SDL_Renderer *ren, uint8_t *const data[3], const int linesiz
     ID3D11VideoProcessorOutputView *ov = NULL;
     hr = ID3D11VideoDevice_CreateVideoProcessorOutputView(g_vsr.vdev, bb, g_vsr.en, &ovd, &ov);
     ID3D11Resource_Release(bb);
-    if (FAILED(hr) || !ov) return up_skip("failed: output view", hr);
+    if (FAILED(hr) || !ov) return up_skip("失败：输出视图", hr);
     const int cx = cw < W ? g_up_crop_x : 0, cy = ch < H ? g_up_crop_y : 0;
     RECT src = { cx, cy, cx + cw, cy + ch }, dstr = { vx, vy, vx + vw, vy + vh };
     ID3D11VideoContext_VideoProcessorSetStreamSourceRect(g_vsr.vctx, g_vsr.vp, 0, TRUE, &src);
@@ -670,7 +670,7 @@ static int vsr_draw(SDL_Renderer *ren, uint8_t *const data[3], const int linesiz
     st.pInputSurface = g_vsr.iv;
     hr = ID3D11VideoContext_VideoProcessorBlt(g_vsr.vctx, g_vsr.vp, ov, 0, 1, &st);
     ID3D11VideoProcessorOutputView_Release(ov);
-    if (FAILED(hr)) return up_skip("failed: video processor blit", hr);
+    if (FAILED(hr)) return up_skip("失败：视频处理器绘制", hr);
     g_up_why[0] = 0;
     g_up.active = 1; g_up.out_w = vw; g_up.out_h = vh;
     return 1;
@@ -707,10 +707,10 @@ static int up_draw_ex(SDL_Renderer *ren, uint8_t *const data[3], const int lines
     SDL_GetRendererOutputSize(ren, &ow, &oh);
     if (W <= 0 || H <= 0 || ow <= 0 || oh <= 0) return 0;
     const double scale = SDL_min((double)ow / W, (double)oh / H);
-    if (scale <= 1.001) return up_skip("window too small", 0);
-    if (UP_CW(W) != W || UP_CH(H) != H) return up_skip("dynamic resolution", 0);   /* v0.7.16: drawn plainly (part of the frame) */
+    if (scale <= 1.001) return up_skip("窗口过小", 0);
+    if (UP_CW(W) != W || UP_CH(H) != H) return up_skip("动态分辨率", 0);   /* v0.7.16: drawn plainly (part of the frame) */
     if (!clarity_draw(ren, (const uint8_t *const *)data, linesize, W, H,
-                      g_fsr_sharpness / 100.0f, nv12)) return up_skip("Metal FSR unavailable", 0);
+                      g_fsr_sharpness / 100.0f, nv12)) return up_skip("Metal FSR 不可用", 0);
     g_up.active = 1;
     g_up.out_w = (int)SDL_lround(W * scale); g_up.out_h = (int)SDL_lround(H * scale);
     g_up_why[0] = 0;
@@ -720,8 +720,8 @@ static int up_draw_ex(SDL_Renderer *ren, uint8_t *const data[3], const int lines
     if (mode == UP_RTX) return vsr_draw(ren, data, linesize, W, H, nv12);
 #endif
     if (mode == UP_OFF && !ext) { g_up_why[0] = 0; return 0; }
-    if (!up_init(ren)) return up_skip("unavailable, press U", 0);
-    if (mode == UP_NIS && !g_up.nis_ok) { up_skip("NIS unavailable", 0); if (!ext) return 0; mode = UP_OFF; }
+    if (!up_init(ren)) return up_skip("不可用，请按 U 切换", 0);
+    if (mode == UP_NIS && !g_up.nis_ok) { up_skip("NIS 不可用", 0); if (!ext) return 0; mode = UP_OFF; }
     int ow = 0, oh = 0;
     SDL_GetRendererOutputSize(ren, &ow, &oh);
     if (W <= 0 || H <= 0 || ow <= 0 || oh <= 0) return 0;
@@ -729,7 +729,7 @@ static int up_draw_ex(SDL_Renderer *ren, uint8_t *const data[3], const int lines
     if ((long)ow * H > (long)oh * W) { vh = oh; vw = (int)((long)oh * W / H); } else { vw = ow; vh = (int)((long)ow * H / W); }
     const int cw = UP_CW(W), ch = UP_CH(H);     /* v0.7.16: the part drawn this frame */
     const int cx = (cw < W && g_up_crop_x + cw <= W) ? g_up_crop_x : 0, cy = (ch < H && g_up_crop_y + ch <= H) ? g_up_crop_y : 0;
-    if (vw <= cw && vh <= ch && mode != UP_OFF) { up_skip("window too small", 0); if (!ext) return 0; mode = UP_OFF; }
+    if (vw <= cw && vh <= ch && mode != UP_OFF) { up_skip("窗口过小", 0); if (!ext) return 0; mode = UP_OFF; }
     const int vx = (ow - vw) / 2, vy = (oh - vh) / 2;
 
     SDL_RenderFlush(ren);
@@ -852,9 +852,9 @@ static int up_draw(SDL_Renderer *ren, uint8_t *const data[3], const int linesize
 /* the note shown when U is pressed */
 static void up_describe(SDL_Renderer *ren, char *out, size_t cap)
 {
-    if (g_upscaler == UP_OFF) { snprintf(out, cap, "Upscaling off  (U)"); return; }
+    if (g_upscaler == UP_OFF) { snprintf(out, cap, "画面放大已关闭（U）"); return; }
 #ifdef __APPLE__
-    snprintf(out, cap, clarity_init(ren) ? "Metal FSR 1, RCAS %d%% (F9)" : "Metal FSR unavailable",
+    snprintf(out, cap, clarity_init(ren) ? "Metal FSR 1, RCAS %d%% (F9)" : "Metal FSR 不可用",
              g_fsr_sharpness);
 #else
 #ifdef _WIN32
@@ -862,11 +862,11 @@ static void up_describe(SDL_Renderer *ren, char *out, size_t cap)
         if (!vsr_init(ren)) {
             SDL_RendererInfo ri;
             if (SDL_GetRendererInfo(ren, &ri) == 0 && strcmp(ri.name, "direct3d11") != 0)
-                snprintf(out, cap, "RTX VSR: restart the viewer to turn it on  (U)");
+                snprintf(out, cap, "RTX VSR：重启客户端以启用（U）");
             else
-                snprintf(out, cap, "RTX VSR unavailable: %s  (U)", g_vsr.note);
+                snprintf(out, cap, "RTX VSR 不可用：%s（U）", g_vsr.note);
         } else {
-            snprintf(out, cap, "Upscaling: RTX VSR on %.60s  (U)", g_vsr.gpu);
+            snprintf(out, cap, "画面放大：RTX VSR · %.60s（U）", g_vsr.gpu);
         }
         return;
     }
@@ -874,13 +874,13 @@ static void up_describe(SDL_Renderer *ren, char *out, size_t cap)
     if (!up_init(ren)) {
         SDL_RendererInfo ri;
         if (SDL_GetRendererInfo(ren, &ri) == 0 && strcmp(ri.name, "opengl") != 0)
-            snprintf(out, cap, "%s: restart the viewer to turn it on  (U)", up_name[g_upscaler]);
+            snprintf(out, cap, "%s：重启客户端以启用（U）", up_name[g_upscaler]);
         else
-            snprintf(out, cap, "%s unavailable: %s  (U)", up_name[g_upscaler], g_up_note);
+            snprintf(out, cap, "%s 不可用：%s（U）", up_name[g_upscaler], g_up_note);
     } else if (g_upscaler == UP_NIS && !g_up.nis_ok) {
-        snprintf(out, cap, "NIS unavailable: %s  (U)", g_up_note);
+        snprintf(out, cap, "NIS 不可用：%s（U）", g_up_note);
     } else {
-        snprintf(out, cap, "Upscaling: %s  (U)%s", up_name[g_upscaler],
+        snprintf(out, cap, "画面放大：%s（U）%s", up_name[g_upscaler],
                  g_upscaler == UP_NIS ? " - NVIDIA Image Scaling" : " - AMD FidelityFX Super Resolution");
     }
 #endif
@@ -889,16 +889,16 @@ static void up_describe(SDL_Renderer *ren, char *out, size_t cap)
 /* the overlay's line */
 static void up_hud_text(char *out, size_t cap)
 {
-    if (!g_up.active) { snprintf(out, cap, "%s", g_upscaler == UP_OFF ? "off (U)" : g_up_why[0] ? g_up_why : "-"); return; }
+    if (!g_up.active) { snprintf(out, cap, "%s", g_upscaler == UP_OFF ? "关闭（U）" : g_up_why[0] ? g_up_why : "-"); return; }
 #ifdef _WIN32
-    if (g_upscaler == UP_RTX && g_vsr.vsr < 0) { snprintf(out, cap, "plain, to %dx%d (no RTX VSR)", g_up.out_w, g_up.out_h); return; }
+    if (g_upscaler == UP_RTX && g_vsr.vsr < 0) { snprintf(out, cap, "普通缩放至 %dx%d（未启用 RTX VSR）", g_up.out_w, g_up.out_h); return; }
 #endif
 #ifdef __APPLE__
     int kernel = 0;
     clarity_status(&kernel, NULL);
     snprintf(out, cap, "%s/RCAS %d%%", kernel == 2 ? "EASU" : "Cubic", g_fsr_sharpness);
 #else
-    snprintf(out, cap, "%s to %dx%d", up_name[g_upscaler], g_up.out_w, g_up.out_h);
+    snprintf(out, cap, "%s → %dx%d", up_name[g_upscaler], g_up.out_w, g_up.out_h);
 #endif
 }
 

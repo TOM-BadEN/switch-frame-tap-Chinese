@@ -340,7 +340,7 @@ static void rec_close_file(rec_file_t *f, const char *why)
     av_frame_free(&f->af);
     av_packet_free(&f->pkt);
     if (why && !*why) return;
-    rec_msg("saved %s (%.0f MB, %.0f s)%s%s", g_rec.path, g_rec.mb, g_rec.secs, why ? " - " : "", why ? why : "");
+    rec_msg("已保存 %s（%.0f MB，%.0f 秒）%s%s", g_rec.path, g_rec.mb, g_rec.secs, why ? " - " : "", why ? why : "");
 }
 
 static int rec_open_file(rec_file_t *f, const rec_item_t *key)
@@ -411,7 +411,7 @@ static int rec_open_file(rec_file_t *f, const rec_item_t *key)
 #endif
         av_frame_get_buffer(f->af, 0);
     } else {
-        rec_msg("no AAC encoder in this FFmpeg - recording without sound");
+        rec_msg("当前 FFmpeg 不含 AAC 编码器，录像将不含声音");
     }
     f->pkt = av_packet_alloc();
     if (f->ac) {
@@ -427,7 +427,7 @@ static int rec_open_file(rec_file_t *f, const rec_item_t *key)
     if (hr < 0) return -1;
     g_rec.secs = 0;
     g_rec.mb = 0;
-    rec_msg("recording to %s (%ux%u)", g_rec.path, key->w, key->h);
+    rec_msg("正在录制至 %s（%ux%u）", g_rec.path, key->w, key->h);
     return 0;
 }
 
@@ -501,7 +501,7 @@ static int rec_main(void *arg)
                     rec_close_file(&f, "");
                     remove(dropped);
                 } else {
-                    rec_close_file(&f, "the picture size changed, continuing in a new file");
+                    rec_close_file(&f, "分辨率已变化，将继续录制到新文件");
                     if (g_rec.fixed_path) { free(it); g_rec.state = REC_OFF; continue; }
                 }
             }
@@ -509,7 +509,7 @@ static int rec_main(void *arg)
                 if (!it->key) { free(it); continue; }
                 const int r = rec_open_file(&f, it);
                 if (r != 0) {
-                    rec_msg("could not create %s", g_rec.path);
+                    rec_msg("无法创建 %s", g_rec.path);
                     if (f.fc) { if (f.fc->pb) avio_closep(&f.fc->pb); avformat_free_context(f.fc); f.fc = NULL; }
                     if (f.ac) avcodec_free_context(&f.ac);
                     av_frame_free(&f.af); av_packet_free(&f.pkt);
@@ -520,7 +520,7 @@ static int rec_main(void *arg)
             }
             rec_video_write(&f, it);
             if (++check % 120 == 0 && !g_rec.fixed_path && rec_free_bytes(g_rec.dir) < RecMinFreeKeep) {
-                rec_close_file(&f, "stopped: the disk is almost full");
+                rec_close_file(&f, "已停止：磁盘空间即将耗尽");
                 g_rec.state = REC_OFF;
             }
         } else if (f.fc) {
@@ -543,7 +543,7 @@ static void rec_push(int audio, int key, uint32_t w, uint32_t h, Uint64 t, const
     if (g_rec.queued + n > RecQueueBytes) {
         SDL_UnlockMutex(g_rec.m);
         free(it);
-        if (g_rec.state != REC_OFF) { g_rec.state = REC_OFF; g_rec.stop_req = 0; rec_msg("stopped: the disk could not keep up"); }
+        if (g_rec.state != REC_OFF) { g_rec.state = REC_OFF; g_rec.stop_req = 0; rec_msg("已停止：磁盘写入速度不足"); }
         return;
     }
     if (g_rec.tail) g_rec.tail->next = it; else g_rec.head = it;
@@ -618,7 +618,7 @@ static void rec_toggle(void)
 {
     if (g_rec.state == REC_OFF) {
         if (!g_rec.fixed_path && rec_free_bytes(g_rec.dir) < RecMinFreeStart) {
-            rec_msg("not started: less than 1 GB free in %s", g_rec.dir);
+            rec_msg("未开始录制：%s 可用空间不足 1 GB", g_rec.dir);
             return;
         }
         rec_join();                    /* a previous recording's writer */
@@ -641,9 +641,9 @@ static double rec_seconds(void) { return g_rec.state == REC_ON ? g_rec.secs : 0;
 static void rec_status(char *out, size_t cap)
 {
     const double since = g_rec.msg_t ? (double)(SDL_GetPerformanceCounter() - g_rec.msg_t) / (double)SDL_GetPerformanceFrequency() : 1e9;
-    if (g_rec.state == REC_WAIT_KEY) snprintf(out, cap, "  |  REC starting...");
+    if (g_rec.state == REC_WAIT_KEY) snprintf(out, cap, "  |  REC 准备中…");
     else if (g_rec.state == REC_ON) snprintf(out, cap, "  |  REC %d:%02d  %.0f MB", (int)g_rec.secs / 60, (int)g_rec.secs % 60, g_rec.mb);
-    else if (since < 6.0 && g_rec.msg[0]) snprintf(out, cap, "  |  %.150s", g_rec.msg);
+    else if (since < 6.0 && g_rec.msg[0]) snprintf(out, cap, "  |  %.*s", (int)sftUtf8Prefix(g_rec.msg, 150), g_rec.msg);
     else out[0] = 0;
 }
 

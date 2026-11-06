@@ -70,6 +70,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include "../../common/utf8.h"
 #include <math.h>
 #include <signal.h>
 #ifdef _WIN32
@@ -635,7 +636,7 @@ static const char *net_peer_for_menu(void) { return g_net_peer; }
 enum { CONN_USB = 0, CONN_NET = 1 };
 static int g_conn = CONN_USB;
 static char g_last_ip[64] = "";
-static char g_net_status[128] = "";    /* what the finder is doing, for the menu */
+static char g_net_status[384] = "";    /* what the finder is doing, for the menu */
 /* Second viewer: back off only when the Switch closes us quickly with no
  * stream (refused / reset). Do NOT treat "connected, waiting for picture"
  * as busy - that was a false positive after closing every viewer. */
@@ -950,7 +951,7 @@ static int net_backing_off(void)
     if (now >= g_net_busy_until) { g_net_busy_until = 0; return 0; }
     const int left = (int)((g_net_busy_until - now + 999) / 1000);
     snprintf(g_net_status, sizeof(g_net_status),
-             "Another viewer may be connected - retrying in %d s", left > 0 ? left : 1);
+             "可能已有其他客户端连接，%d 秒后重试", left > 0 ? left : 1);
     return 1;
 }
 
@@ -961,7 +962,7 @@ static void net_mark_busy(void)
     if (g_net_busy_ms > 20000) g_net_busy_ms = 20000;
     g_net_busy_until = SDL_GetTicks64() + (Uint64)g_net_busy_ms;
     snprintf(g_net_status, sizeof(g_net_status),
-             "Another viewer may be connected - retrying in %d s", (g_net_busy_ms + 999) / 1000);
+             "可能已有其他客户端连接，%d 秒后重试", (g_net_busy_ms + 999) / 1000);
     fprintf(stderr, "\nnetwork: Switch closed us before any stream - backing off %d ms\n", g_net_busy_ms);
 }
 
@@ -1010,12 +1011,12 @@ static int finder_main(void *arg)
             struct in_addr ia;
             if (inet_pton(AF_INET, g_last_ip, &ia) == 1) {
                 uint32_t ip = ia.s_addr, w = 0;
-                snprintf(g_net_status, sizeof(g_net_status), "Trying %s (the last address)...", g_last_ip);
+                snprintf(g_net_status, sizeof(g_net_status), "正在尝试上次的地址 %s…", g_last_ip);
                 sock_t s = connect_any(&ip, 1, NET_PORT, 700, &w);
                 if (s != SOCK_BAD) { use_found(s, w); break; }
                 /* refused: the Switch is there but set to USB (#24) */
                 if (g_last_refused) {
-                    snprintf(g_net_status, sizeof(g_net_status), "%.15s is there but set to USB - choose Network on the Switch, then restart it", g_last_ip);
+                    snprintf(g_net_status, sizeof(g_net_status), "已发现 %.15s，但主机设为 USB，请在主机上选择网络并重启", g_last_ip);
                     for (int t = 0; t < 40 && !g_finder_stop && !g_quit; t++) SDL_Delay(100);
                 }
             }
@@ -1026,7 +1027,7 @@ static int finder_main(void *arg)
             char net[32];
             struct in_addr ia; ia.s_addr = htonl(base);
             inet_ntop(AF_INET, &ia, net, sizeof(net));
-            snprintf(g_net_status, sizeof(g_net_status), "Looking on %s/24...", net);
+            snprintf(g_net_status, sizeof(g_net_status), "正在搜索 %s/24…", net);
             for (int b = 1; b < 255 && !g_finder_stop && g_found_sock == SOCK_BAD; b += 64) {
                 uint32_t ips[64]; int n = 0;
                 for (int h = b; h < b + 64 && h < 255; h++) ips[n++] = htonl(base | (uint32_t)h);
@@ -1035,7 +1036,7 @@ static int finder_main(void *arg)
                 if (s != SOCK_BAD) { use_found(s, w); break; }
             }
         } else {
-            snprintf(g_net_status, sizeof(g_net_status), "This PC is not on a network");
+            snprintf(g_net_status, sizeof(g_net_status), "此电脑未连接网络");
         }
         for (int i = 0; i < 30 && !g_finder_stop && g_found_sock == SOCK_BAD; i++) SDL_Delay(100);
     }
@@ -1189,8 +1190,27 @@ static int status_for_menu(char *head, size_t hn, char *detail, size_t dn, uint3
     int fresh = 0;
     SDL_AtomicLock(&g_status_lock);
     if (g_status_t != 0 && SDL_GetTicks64() - g_status_t < 4000 && g_status.reason != 0) {
-        snprintf(head, hn, "%s", g_status.head);
-        snprintf(detail, dn, "%s", g_status.detail);
+        /* Localize known reason codes here; keep wire text and packet sizes
+         * compatible with existing Switch senders and other clients. */
+        static const char *const s_statusText[][2] = { /* Titles/details indexed by protocol reason 0..13. */
+            { "", "" },
+            { "已连接，尚未启动游戏", "启动游戏后即可显示画面。" },
+            { "已连接，当前未显示游戏", "当前系统界面无法串流，请返回游戏。" },
+            { "已暂停：系统小程序正在运行", "关闭说明书、eShop 等小程序后，串流会在数秒内恢复。" },
+            { "串流已关闭", "请在 Switch 的悬浮菜单或管理应用中开启串流。" },
+            { "当前应用已排除串流", "请在 Switch 管理应用中将其移出排除列表。" },
+            { "当前固件未经测试", "请在 Switch 管理应用中开启“允许未经测试的固件”。" },
+            { "视频引擎无响应", "请重启主机以恢复串流。" },
+            { "当前内存不足，无法串流", "程序会每隔数秒自动重试。" },
+            { "未找到游戏画面", "请重启游戏。若仍有问题，请提供日志。" },
+            { "正在启动串流…", "" },
+            { "已暂停：系统键盘已打开", "系统键盘占用所需内存，关闭后将恢复串流。" },
+            { "游戏分辨率超过 1080p", "Switch Frame Tap 最高支持 1920x1080。" },
+            { "USB 连接速度过低（USB 1.1，12 Mbps）", "请更换 USB 集线器、转接头或数据线，也可使用网络连接。" },
+        };
+        const int known = g_status.version == 1 && g_status.reason < sizeof(s_statusText) / sizeof(s_statusText[0]); /* Unknown protocol versions retain the sender's text. */
+        snprintf(head, hn, "%s", known ? s_statusText[g_status.reason][0] : g_status.head);
+        snprintf(detail, dn, "%s", known ? s_statusText[g_status.reason][1] : g_status.detail);
         *reason = g_status.reason;
         fresh = 1;
     }
@@ -1654,7 +1674,7 @@ static void act_fullscreen(SDL_Window *win)
             fprintf(stderr, "\nfullscreen: the screen is %dx%d at %d Hz\n", dm.w, dm.h, dm.refresh_rate);
             if (a > 16.0 / 9.0 * 1.03 || a < 16.0 / 9.0 * 0.97) {
                 char t[128];
-                snprintf(t, sizeof(t), "%dx%d - Alt-drag pan, Ctrl-wheel zoom, Ctrl-click reset", dm.w, dm.h);
+                snprintf(t, sizeof(t), "%dx%d · Alt 拖动，Ctrl 滚轮缩放，Ctrl 单击复位", dm.w, dm.h);
                 hud_toast(t);
             }
         }
@@ -1705,7 +1725,7 @@ static void act_record(SDL_Window *win)
     key_request();
     char t[256], rs[200];
     rec_status(rs, sizeof(rs));
-    snprintf(t, sizeof(t), "Switch Frame Tap%s", rs[0] ? rs : "  |  recording stopped");
+    snprintf(t, sizeof(t), "Switch Frame Tap%s", rs[0] ? rs : "  |  录制已停止");
     SDL_SetWindowTitle(win, t);
 }
 
@@ -1716,7 +1736,7 @@ static void act_update(void)
     switch (upd_state()) {
     case UPD_FOUND: upd_get(); break;
     case UPD_READY:
-        if (rec_active()) { upd_note("Stop the recording first (R), then restart"); break; }
+        if (rec_active()) { upd_note("请先按 R 停止录制，再重启"); break; }
         upd_restart();
         break;
     case UPD_ERROR: if (g_upd.failed_update) upd_get(); else upd_check(); break;
@@ -1737,7 +1757,7 @@ static void act_vsync(SDL_Renderer *ren, int on)
     g_vsync = on;
     SDL_RenderSetVSync(ren, g_vsync);
     prefs_save();
-    hud_toast(g_vsync ? "Vsync on" : "Vsync off: lower latency, may tear");
+    hud_toast(g_vsync ? "已开启垂直同步" : "已关闭垂直同步：延迟更低，可能撕裂");
     fprintf(stderr, "\nvsync %s\n", g_vsync ? "on" : "off");
 }
 
@@ -1746,7 +1766,7 @@ static void act_rec_one_file(int on)
     g_rec_one_file = on != 0;
     prefs_save();
     if (rec_active()) key_request();   /* the console hears it now (SFTL / SFTU) */
-    hud_toast(g_rec_one_file ? "One file per recording" : "Recordings follow the picture size");
+    hud_toast(g_rec_one_file ? "每次录制仅保存一个文件" : "分辨率变化时新建录像文件");
     fprintf(stderr, "\none file per recording %s\n", g_rec_one_file ? "on" : "off");
 }
 
@@ -1755,7 +1775,7 @@ static void act_lock_aspect(SDL_Window *win, int on)
     g_lock_aspect = on != 0;
     prefs_save();
     if (g_lock_aspect && win) aspect_constrain_window(win);
-    hud_toast(g_lock_aspect ? "Aspect lock on (16:9)" : "Aspect lock off");
+    hud_toast(g_lock_aspect ? "已锁定宽高比（16:9）" : "已解除宽高比锁定");
     fprintf(stderr, "\naspect lock %s\n", g_lock_aspect ? "on" : "off");
 }
 
@@ -1774,7 +1794,7 @@ static void act_chromeless(SDL_Window *win, int on)
     g_drag_pending = g_dragging = 0;
     prefs_save();
     apply_chromeless(win);
-    hud_toast(g_chromeless ? "Borderless on - drag the picture to move" : "Window frame on");
+    hud_toast(g_chromeless ? "已启用无边框，拖动画面移动窗口" : "已显示窗口边框");
     fprintf(stderr, "\nchromeless %s\n", g_chromeless ? "on" : "off");
 }
 
@@ -1789,7 +1809,7 @@ static void act_always_on_top(SDL_Window *win, int on)
     g_always_on_top = on != 0;
     prefs_save();
     apply_always_on_top(win);
-    hud_toast(g_always_on_top ? "Always on top" : "Always on top off");
+    hud_toast(g_always_on_top ? "窗口置顶" : "已取消窗口置顶");
     fprintf(stderr, "\nalways on top %s\n", g_always_on_top ? "on" : "off");
 }
 
@@ -1800,7 +1820,7 @@ static void act_upscaler(SDL_Renderer *ren, int mode)   /* -1 = the next one */
     prefs_save();
     if (up_needs_swap(ren)) {                 /* the other graphics API: the live loop switches */
         g_ren_swap = 1;
-        snprintf(t, sizeof(t), "Upscaling: %s - switching the graphics mode...", up_name[g_upscaler]);
+        snprintf(t, sizeof(t), "画面放大：%s，正在切换图形模式…", up_name[g_upscaler]);
     } else {
         up_describe(ren, t, sizeof(t));
     }
@@ -1821,7 +1841,7 @@ static void act_hwdec(int on)
     g_hwdec = on;
     g_dec_reopen = 1;
     prefs_save();
-    hud_toast(on ? "Hardware decoding on" : "Hardware decoding off - decoding on the CPU");
+    hud_toast(on ? "已开启硬件解码" : "已关闭硬件解码，使用 CPU 解码");
 }
 
 #include "pad.h"               /* v0.7.20: a controller here plays the Switch */
@@ -1883,7 +1903,7 @@ static void view_reset(void)
     if (g_view_panning) SDL_CaptureMouse(SDL_FALSE);
     g_view_panning = 0;
     prefs_mark_dirty();
-    hud_toast("Picture place reset");
+    hud_toast("已重置画面位置");
     ui_dbg("view reset\n");
 }
 
@@ -1975,7 +1995,7 @@ static void try_pending_connect(void)
     struct in_addr ia;
     uint32_t w = 0;
     if (inet_pton(AF_INET, g_connect_ip, &ia) != 1) {
-        snprintf(g_net_status, sizeof(g_net_status), "\"%s\" is not an IPv4 address", g_connect_ip);
+        snprintf(g_net_status, sizeof(g_net_status), "“%s”不是有效的 IPv4 地址", g_connect_ip);
         return;
     }
     finder_stop();
@@ -1984,7 +2004,7 @@ static void try_pending_connect(void)
     sock_t sk = connect_any(&ip, 1, NET_PORT, 800, &w);
     if (sk != SOCK_BAD) use_found(sk, w);
     else snprintf(g_net_status, sizeof(g_net_status),
-                  "No Switch Frame Tap at %s (is Connection set to Network on the Switch?)", g_connect_ip);
+                  "%s 未发现 Switch Frame Tap，请确认主机已设为网络连接", g_connect_ip);
 }
 
 static void app_events(SDL_Window *win, SDL_Renderer *ren, SDL_Texture *tex)
@@ -2126,7 +2146,7 @@ static void app_events(SDL_Window *win, SDL_Renderer *ren, SDL_Texture *tex)
         /* v0.7.20: with the mouse set to play the Switch, a click on the picture takes it (F10 lets go) */
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && !g_mouse_cap && !g_menu && !g_ui_open &&
             !g_ip_editing && pad_mouse_ready()) {
-            pad_mouse_grab(1, "The Switch has the mouse - F10 lets go");
+            pad_mouse_grab(1, "鼠标正在控制 Switch，F10 释放");
             continue;
         }
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && e.button.clicks == 1) {
@@ -2200,7 +2220,7 @@ static void app_events(SDL_Window *win, SDL_Renderer *ren, SDL_Texture *tex)
                     g_ip_editing = 0;
                     SDL_StopTextInput();
                     snprintf(g_connect_ip, sizeof(g_connect_ip), "%s", g_ip_edit);
-                    snprintf(g_net_status, sizeof(g_net_status), "Connecting to %s...", g_connect_ip);
+                    snprintf(g_net_status, sizeof(g_net_status), "正在连接 %s…", g_connect_ip);
                     g_connect_pending = 1;
                     if (g_menu) menu_draw(ren);
                 }
@@ -2321,9 +2341,9 @@ static void app_title_cannot_open(SDL_Window *win, int err)
 {
     char t[256];
 #ifdef _WIN32
-    snprintf(t, sizeof(t), "Switch Frame Tap - the Switch is connected but has no USB driver: install WinUSB for it once with Zadig (see README.txt)  [%s]", libusb_error_name(err));
+    snprintf(t, sizeof(t), "Switch Frame Tap · 已连接 Switch，但缺少 USB 驱动，请使用 Zadig 安装 WinUSB（见 README.txt）[%s]", libusb_error_name(err));
 #else
-    snprintf(t, sizeof(t), "Switch Frame Tap - the Switch is connected but cannot be opened: install the udev rule (see the README)  [%s]", libusb_error_name(err));
+    snprintf(t, sizeof(t), "Switch Frame Tap · 已连接但无法访问 Switch，请安装 udev 规则（见说明文档）[%s]", libusb_error_name(err));
 #endif
     SDL_SetWindowTitle(win, t);
     g_menu_state = MENU_NODRIVER;
@@ -2349,7 +2369,7 @@ static void open_drawer_at_start(void)
 /* --app: open and claim the console, keeping the window alive meanwhile */
 static int app_wait_device(libusb_context *ctx, SDL_Window *win, SDL_Renderer *ren, SDL_Texture *tex)
 {
-    SDL_SetWindowTitle(win, "Switch Frame Tap - waiting for the Switch (USB cable, a game running)");
+    SDL_SetWindowTitle(win, "Switch Frame Tap · 等待 Switch（请连接 USB 数据线并启动游戏）");
     int said = 0;
     g_menu = 1;
     g_menu_state = MENU_WAITING;
@@ -2370,7 +2390,7 @@ static int app_wait_device(libusb_context *ctx, SDL_Window *win, SDL_Renderer *r
             finder_start();
             if (net_try_connect()) {
                 char t[160];
-                snprintf(t, sizeof(t), "Switch Frame Tap - connected over the network (%s), waiting for the picture", g_net_peer);
+                snprintf(t, sizeof(t), "Switch Frame Tap · 已通过网络连接（%s），等待画面", g_net_peer);
                 SDL_SetWindowTitle(win, t);
                 g_menu_state = MENU_CONNECTED;
                 menu_draw(ren);
@@ -2384,7 +2404,7 @@ static int app_wait_device(libusb_context *ctx, SDL_Window *win, SDL_Renderer *r
         if (h) {
             libusb_set_auto_detach_kernel_driver(h, 1);
             if (libusb_claim_interface(h, SFT_IFACE) == 0) {
-                SDL_SetWindowTitle(win, "Switch Frame Tap - connected, waiting for the picture");
+                SDL_SetWindowTitle(win, "Switch Frame Tap · 已连接，等待画面");
                 g_menu_state = MENU_CONNECTED;
                 menu_draw(ren);
                 g_usb = h;
@@ -2405,13 +2425,13 @@ static int app_wait_device(libusb_context *ctx, SDL_Window *win, SDL_Renderer *r
                 if (said != 2) {
                     fprintf(stderr, "usb: the Switch is presenting %s, not Switch Frame Tap - remove/disable that program and reboot\n", other);
                     char t[220];
-                    snprintf(t, sizeof(t), "Switch Frame Tap - the Switch is presenting %s, not Switch Frame Tap", other);
+                    snprintf(t, sizeof(t), "Switch Frame Tap · 主机当前运行的 USB 程序为 %s", other);
                     SDL_SetWindowTitle(win, t);
                 }
                 g_menu_state = MENU_WRONG_DEVICE;
                 said = 2;
             } else if (said) {
-                SDL_SetWindowTitle(win, "Switch Frame Tap - waiting for the Switch (USB cable, a game running)");
+                SDL_SetWindowTitle(win, "Switch Frame Tap · 等待 Switch（请连接 USB 数据线并启动游戏）");
                 said = 0;
                 g_menu_state = MENU_WAITING;
             }
@@ -2503,7 +2523,7 @@ static int decoder_main(void *arg)
             key_request();                     /* v0.7.13: a new decoder starts at a keyframe */
             if (h264_open(a->dec, 1, 1, g_hwdec) == 0) {
                 if (a->dec->hwname) snprintf(g_dec_name, sizeof(g_dec_name), "GPU (%s)", a->dec->hwname);
-                else snprintf(g_dec_name, sizeof(g_dec_name), "1 thread");
+                else snprintf(g_dec_name, sizeof(g_dec_name), "单线程");
                 g_dec_mode = g_dec_name;
                 g_dec_low = 1; g_dec_fallback = 0;
             }
@@ -2527,7 +2547,7 @@ static int decoder_main(void *arg)
                         fprintf(stderr, "\ndecode: %.1f ms a frame on one thread - switching to two frame threads (one frame more latency)\n", fb_ms / fb_n);
                         h264_close(a->dec);
                         key_request();
-                        if (h264_open(a->dec, 0, 2, 0) == 0) { g_dec_fallback = 1; g_dec_mode = "2 threads (slow PC)"; hud_toast("Decoding on 2 threads: this PC is slow for 1"); }
+                        if (h264_open(a->dec, 0, 2, 0) == 0) { g_dec_fallback = 1; g_dec_mode = "双线程（性能不足）"; hud_toast("单线程解码性能不足，已切换至双线程"); }
                         continue;
                     }
                     fb_n = 0; fb_ms = 0;
@@ -2542,7 +2562,7 @@ static int decoder_main(void *arg)
                 fprintf(stderr, "\ndecode: %s failed %d frames in a row - software from now on\n", a->dec->hwname, hw_err);
                 h264_close(a->dec);
                 key_request();
-                if (h264_open(a->dec, 1, 1, 0) == 0) { snprintf(g_dec_name, sizeof(g_dec_name), "1 thread (GPU failed)"); g_dec_mode = g_dec_name; hud_toast("GPU decoding failed - decoding on the CPU"); }
+                if (h264_open(a->dec, 1, 1, 0) == 0) { snprintf(g_dec_name, sizeof(g_dec_name), "单线程（GPU 解码失败）"); g_dec_mode = g_dec_name; hud_toast("GPU 解码失败，已切换至 CPU"); }
                 hw_err = 0;
                 continue;
             }
@@ -2573,7 +2593,7 @@ static int run_live(libusb_context *ctx, SDL_Window *win, SDL_Renderer *ren, int
     if (h264_open(&dec, low_latency, threads, g_hwdec) != 0) { fprintf(stderr, "libavcodec H.264 decoder unavailable\n"); return 1; }
     g_dec_low = low_latency || dec.hwname;
     if (dec.hwname) { snprintf(g_dec_name, sizeof(g_dec_name), "GPU (%s)", dec.hwname); g_dec_mode = g_dec_name; }
-    else g_dec_mode = low_latency ? "1 thread" : "frame threads (--threads)";
+    else g_dec_mode = low_latency ? "单线程" : "frame threads (--threads)";
     fprintf(stderr, "decode: %s\n", dec.hwname ? g_dec_name : low_latency ? "one thread, no decoder delay" : "frame threads (--threads)");
     if (!win) {
         if (video_init() != 0) { fprintf(stderr, "SDL_Init: %s\n", SDL_GetError()); return 1; }
@@ -2846,7 +2866,7 @@ static int run_live(libusb_context *ctx, SDL_Window *win, SDL_Renderer *ren, int
                     if (g_upscaler != UP_OFF && g_up.active && dec_fps >= 40 && dms < 10.0 && w_skipped > 0 && shown_fps < 0.8 * dec_fps) {
                         if (++slow_secs >= 2) {
                             char t[112];
-                            snprintf(t, sizeof(t), "Upscaling to %dx%d is too slow on this graphics card - turned off (U to try again)", g_up.out_w, g_up.out_h);
+                            snprintf(t, sizeof(t), "当前显卡放大至 %dx%d 的性能不足，已关闭（按 U 重试）", g_up.out_w, g_up.out_h);
                             fprintf(stderr, "\nupscaler: %s (%.0f of %.0f fps shown)\n", t, shown_fps, dec_fps);
                             g_upscaler = UP_OFF;
                             if (up_needs_swap(ren)) g_ren_swap = 1;
@@ -3120,7 +3140,7 @@ int main(int argc, char **argv)
         /* a double-clicked program has no console: say it in a box */
         if (libusb_init(&ctx) != 0) {
             fprintf(stderr, "libusb_init failed\n");
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Switch Frame Tap", "USB support could not be started (libusb_init failed).", NULL);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Switch Frame Tap", "无法启动 USB 支持（libusb_init 失败）。", NULL);
             return 1;
         }
         if (video_init() != 0) {

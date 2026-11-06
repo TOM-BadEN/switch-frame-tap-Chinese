@@ -20,11 +20,11 @@ static const pic_t pic_default = { 0, 100, 100, 10, 0 };
 static pic_t g_pic = { 0, 100, 100, 10, 0 };
 
 static const struct { const char *name; int min, max, step; } pic_rows[PIC_N] = {
-    { "Brightness", -50, 50, 5 },
-    { "Contrast",    50, 150, 5 },
-    { "Saturation",   0, 200, 10 },
+    { "亮度", -50, 50, 5 },
+    { "对比度",    50, 150, 5 },
+    { "饱和度",   0, 200, 10 },
     { "Gamma",        5, 20, 1 },      /* x10 */
-    { "Sharpness",    0, 100, 10 },
+    { "锐化强度",    0, 100, 10 },
 };
 
 static int *pic_field(int row)

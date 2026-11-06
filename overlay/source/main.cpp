@@ -182,11 +182,11 @@ namespace {
 
     volatile RnxShared *CurrentRnx() {
         u64 pid = 0;
-        if (R_FAILED(pmdmntGetApplicationProcessId(&pid))) { g_rnx_note = "No game running"; return nullptr; }
-        if (!MapSaltyShared()) { g_rnx_note = "SaltyNX not found"; return nullptr; }
+        if (R_FAILED(pmdmntGetApplicationProcessId(&pid))) { g_rnx_note = "没有正在运行的游戏"; return nullptr; }
+        if (!MapSaltyShared()) { g_rnx_note = "未找到 SaltyNX"; return nullptr; }
         volatile RnxShared *r = FindRnx(pid);
-        if (r == nullptr) { g_rnx_note = "ReverseNX-RT not loaded in this game"; return nullptr; }
-        if (!r->pluginActive) { g_rnx_note = "This game does not use ReverseNX-RT"; return nullptr; }
+        if (r == nullptr) { g_rnx_note = "当前游戏未加载 ReverseNX-RT"; return nullptr; }
+        if (!r->pluginActive) { g_rnx_note = "当前游戏未使用 ReverseNX-RT"; return nullptr; }
         g_rnx_note.clear();
         return r;
     }
@@ -228,20 +228,20 @@ namespace {
 
     std::string StatusText(bool have, const StreamStatus &st) {
         char b[96];
-        if (!have) { return "Sysmodule not running"; }
+        if (!have) { return "后台模块未运行"; }
         switch (st.state) {
-            case LiveState_Starting:   return "Starting (waits for a game)";
-            case LiveState_Off:        return "Off";
-            case LiveState_WaitViewer: return (st.reserved3 & 1) ? "Waiting for a camera app" : (st.reserved3 & 2) ? "Waiting for the viewer (USB/network)" : "Waiting for the PC viewer";   /* v0.4 webcam, v0.7 network */
-            case LiveState_WaitGame:   return "Waiting for a game";
+            case LiveState_Starting:   return "启动中（等待游戏）";
+            case LiveState_Off:        return "关闭";
+            case LiveState_WaitViewer: return (st.reserved3 & 1) ? "等待摄像头应用连接" : (st.reserved3 & 2) ? "等待客户端（USB/网络）" : "等待电脑客户端";   /* v0.4 webcam, v0.7 network */
+            case LiveState_WaitGame:   return "等待游戏启动";
             case LiveState_Streaming:
-                std::snprintf(b, sizeof(b), "Streaming %ux%u, %u.%u fps", st.width, st.height, st.fps_x10 / 10, st.fps_x10 % 10);
+                std::snprintf(b, sizeof(b), "串流 %ux%u，%u.%u FPS", st.width, st.height, st.fps_x10 / 10, st.fps_x10 % 10);
                 return b;
-            case LiveState_Wedged:     return "Encoder stalled - reboot to stream again";
-            case LiveState_NotArmed:   return "Live mode not armed (arm file)";
-            case 7:                    return "Firmware not tested - see the manager app";
-            case 8:                    return "Not streaming this app (excluded)";
-            default:                   return "Unknown";
+            case LiveState_Wedged:     return "编码器无响应，请重启主机";
+            case LiveState_NotArmed:   return "测试文件未启用实时串流";
+            case 7:                    return "固件未经测试，请查看管理应用";
+            case 8:                    return "当前应用已排除串流";
+            default:                   return "未知";
         }
     }
 
@@ -251,15 +251,15 @@ namespace {
                 auto *frame = new tsl::elm::OverlayFrame("Switch Frame Tap", "v0.7.21.1");
                 auto *list = new tsl::elm::List();
 
-                list->addItem(new tsl::elm::CategoryHeader("Stream to PC"));
+                list->addItem(new tsl::elm::CategoryHeader("串流到电脑"));
                 m_have = SftapStatus(&m_st);
-                m_toggle = new tsl::elm::ToggleListItem("Stream", m_have && m_st.enabled != 0);
+                m_toggle = new tsl::elm::ToggleListItem("串流", m_have && m_st.enabled != 0);
                 m_toggle->setStateChangedListener([this](bool on) {
                     SftapSetEnabled(on);
                     m_tick = 0;
                 });
                 list->addItem(m_toggle);
-                m_app = new tsl::elm::ListItem("Stream this app");
+                m_app = new tsl::elm::ListItem("串流当前应用");
                 m_app->setClickListener([this](u64 keys) {
                     if ((keys & HidNpadButton_A) && m_have && m_st.version >= 3 && m_st.app_tid != 0) {
                         SftapSetAppExcluded(m_st.app_tid, m_st.app_excluded == 0);
@@ -275,7 +275,7 @@ namespace {
                     std::string v;
                     bool on = false;
                     tsl::hlp::doWithSDCardHandle([&] { on = sftini::Get("screen_off", &v) && v == "1"; });
-                    auto *scr = new tsl::elm::ToggleListItem("Screen off while streaming", on);
+                    auto *scr = new tsl::elm::ToggleListItem("串流时关闭主机屏幕", on);
                     scr->setStateChangedListener([](bool on) {
                         tsl::hlp::doWithSDCardHandle([&] { sftini::Set("screen_off", on ? "1" : "0"); });
                         SftapSetScreenOff(on);
@@ -287,9 +287,9 @@ namespace {
                     r->drawString(m_game.c_str(), false, x + 15, y + 46, 16, r->a(tsl::style::color::ColorDescription));
                 }), 60);
 
-                list->addItem(new tsl::elm::CategoryHeader("Game sound"));
+                list->addItem(new tsl::elm::CategoryHeader("游戏声音"));
                 m_patch_state = GetPatchState();
-                m_patch = new tsl::elm::ToggleListItem("Enable sound in no-record games", m_patch_state == PatchState::On);
+                m_patch = new tsl::elm::ToggleListItem("采集禁用录制游戏的声音", m_patch_state == PatchState::On);
                 m_patch->setStateChangedListener([this](bool on) {
                     if (m_patch_state == PatchState::Missing) { m_patch->setState(false); return; }
                     if (SetPatch(on)) { m_patch_changed = !m_patch_changed; }
@@ -298,26 +298,26 @@ namespace {
                 });
                 list->addItem(m_patch);
                 list->addItem(new tsl::elm::CustomDrawer([this](tsl::gfx::Renderer *r, s32 x, s32 y, s32 w, s32 h) {
-                    const char *l1 = m_patch_state == PatchState::Missing ? "Not installed - see the README"
-                                   : m_patch_changed ? "Restart the console to apply"
-                                   : "For games like Smash. Turn off if a game crashes.";
+                    const char *l1 = m_patch_state == PatchState::Missing ? "未安装，请查看说明文档"
+                                   : m_patch_changed ? "重启主机后生效"
+                                   : "适用于大乱斗等游戏。若崩溃请关闭。";
                     r->drawString(l1, false, x + 15, y + 22, 16, r->a(m_patch_changed ? tsl::style::color::ColorHighlight : tsl::style::color::ColorDescription));
                 }), 36);
 
-                list->addItem(new tsl::elm::CategoryHeader("Beta (from the next restart)"));
+                list->addItem(new tsl::elm::CategoryHeader("实验功能（重启后生效）"));
                 {
                     std::string v;
                     tsl::hlp::doWithSDCardHandle([&] {
                         m_cfg_home = sftini::Get("home_menu", &v) && v == "1";
                         m_cfg_ovl = sftini::Get("overlays", &v) && v == "1";
                     });
-                    auto *home = new tsl::elm::ToggleListItem("Stream the HOME menu", m_cfg_home);
+                    auto *home = new tsl::elm::ToggleListItem("串流 HOME 菜单", m_cfg_home);
                     home->setStateChangedListener([this](bool on) {
                         tsl::hlp::doWithSDCardHandle([&] { sftini::Set("home_menu", on ? "1" : "0"); });
                         m_cfg_home = on;
                     });
                     list->addItem(home);
-                    auto *ovl = new tsl::elm::ToggleListItem("Stream the overlays", m_cfg_ovl);
+                    auto *ovl = new tsl::elm::ToggleListItem("串流悬浮界面", m_cfg_ovl);
                     ovl->setStateChangedListener([this](bool on) {
                         tsl::hlp::doWithSDCardHandle([&] { sftini::Set("overlays", on ? "1" : "0"); });
                         m_cfg_ovl = on;
@@ -326,12 +326,12 @@ namespace {
                 }
                 list->addItem(new tsl::elm::CustomDrawer([this](tsl::gfx::Renderer *r, s32 x, s32 y, s32 w, s32 h) {
                     const bool pending = m_have && (((m_st.reserved3 & 16) != 0) != m_cfg_home || ((m_st.reserved3 & 32) != 0) != m_cfg_ovl);
-                    const char *l1 = pending ? "Restart the console to apply" : "Overlays: volume bar, quick settings, power menu, this menu";
+                    const char *l1 = pending ? "重启主机后生效" : "包含音量条、快捷设置、电源及悬浮菜单";
                     r->drawString(l1, false, x + 15, y + 22, 16, r->a(pending ? tsl::style::color::ColorHighlight : tsl::style::color::ColorDescription));
                 }), 36);
 
-                list->addItem(new tsl::elm::CategoryHeader("Display mode (ReverseNX-RT)"));
-                static const char *const names[] = { "", "Game default", "Handheld (720p)", "Docked (1080p)" };
+                list->addItem(new tsl::elm::CategoryHeader("显示模式（ReverseNX-RT）"));
+                static const char *const names[] = { "", "游戏默认", "掌机模式（720p）", "底座模式（1080p）" };
                 for (int i = 1; i <= 3; ++i) {
                     auto *item = new tsl::elm::ListItem(names[i]);
                     const Mode m = static_cast<Mode>(i);
@@ -343,18 +343,18 @@ namespace {
                     list->addItem(item);
                 }
                 list->addItem(new tsl::elm::CustomDrawer([this](tsl::gfx::Renderer *r, s32 x, s32 y, s32 w, s32 h) {
-                    const char *note = !g_rnx_note.empty() ? g_rnx_note.c_str() : "1080p60 wants CPU 1785 MHz";
+                    const char *note = !g_rnx_note.empty() ? g_rnx_note.c_str() : "1080p60 建议 CPU 1785 MHz";
                     r->drawString(note, false, x + 15, y + 22, 16, r->a(tsl::style::color::ColorDescription));
                 }), 36);
 
                 /* v0.7.18: homebrew from the Homebrew Menu told the console is docked
                  * (homebrew_docked) - from the next app started, no restart */
-                list->addItem(new tsl::elm::CategoryHeader("Homebrew (beta)"));
+                list->addItem(new tsl::elm::CategoryHeader("自制应用（实验功能）"));
                 {
                     std::string v;
                     bool on = false;
                     tsl::hlp::doWithSDCardHandle([&] { on = sftini::Get("homebrew_docked", &v) && v == "1"; });
-                    auto *hb = new tsl::elm::ToggleListItem("Docked mode (1080p)", on);
+                    auto *hb = new tsl::elm::ToggleListItem("底座模式（1080p）", on);
                     hb->setStateChangedListener([](bool on) {
                         tsl::hlp::doWithSDCardHandle([&] { sftini::Set("homebrew_docked", on ? "1" : "0"); });
                         SftapReload();
@@ -362,7 +362,7 @@ namespace {
                     list->addItem(hb);
                 }
                 list->addItem(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer *r, s32 x, s32 y, s32 w, s32 h) {
-                    r->drawString("Next app: R over a game, or a forwarder", false, x + 15, y + 22, 16, r->a(tsl::style::color::ColorDescription));
+                    r->drawString("下次通过 R 启动游戏或前端进入时生效", false, x + 15, y + 22, 16, r->a(tsl::style::color::ColorDescription));
                 }), 36);
 
                 frame->setContent(list);
@@ -380,14 +380,14 @@ namespace {
                 m_status = StatusText(m_have, m_st);
                 if (m_have && m_st.state == LiveState_Streaming && m_st.game_fps_x10 != 0) {
                     char b[64];
-                    std::snprintf(b, sizeof(b), "game %u.%u fps", m_st.game_fps_x10 / 10, m_st.game_fps_x10 % 10);
+                    std::snprintf(b, sizeof(b), "游戏 %u.%u FPS", m_st.game_fps_x10 / 10, m_st.game_fps_x10 % 10);
                     m_game = b;
                 } else {
                     m_game.clear();
                 }
                 if (m_app != nullptr) {
-                    if (!m_have || m_st.version < 3 || m_st.app_tid == 0) { m_app->setValue("No app", true); }
-                    else { m_app->setValue(m_st.app_excluded ? "Off" : "On", m_st.app_excluded != 0); }
+                    if (!m_have || m_st.version < 3 || m_st.app_tid == 0) { m_app->setValue("无应用", true); }
+                    else { m_app->setValue(m_st.app_excluded ? "关闭" : "开启", m_st.app_excluded != 0); }
                 }
                 if (m_toggle != nullptr && m_have && m_toggle->getState() != (m_st.enabled != 0)) {
                     m_toggle->setState(m_st.enabled != 0);
@@ -396,7 +396,7 @@ namespace {
                 for (int i = 1; i <= 3; ++i) {
                     if (m_modes[i] == nullptr) { continue; }
                     if (cur == Mode::Unavailable) { m_modes[i]->setValue("-", true); }
-                    else { m_modes[i]->setValue(static_cast<int>(cur) == i ? "Active" : "", false); }
+                    else { m_modes[i]->setValue(static_cast<int>(cur) == i ? "已启用" : "", false); }
                 }
             }
 

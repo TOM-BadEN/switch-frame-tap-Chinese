@@ -109,6 +109,15 @@ namespace ttfpreview {
 
 }
 
+/* Measure UTF-8 text using f; w/h receive pixel extents. Returns zero.
+ * This mirrors SDL_ttf for the manager's Chinese line-break measurement. */
+inline int TTF_SizeUTF8(TTF_Font *f, const char *text, int *w, int *h) {
+    const std::vector<int> codepoints = ttfpreview::Decode(text); /* Scalars measured with the preview font. */
+    *w = static_cast<int>(std::ceil(ttfpreview::Width(f, codepoints, 0, codepoints.size())));
+    *h = ttfpreview::LineH(f);
+    return 0;
+}
+
 inline SDL_Surface *TTF_RenderUTF8_Blended(TTF_Font *f, const char *text, SDL_Color c) {
     const std::vector<int> cp = ttfpreview::Decode(text);
     const int w = std::max(1, static_cast<int>(std::ceil(ttfpreview::Width(f, cp, 0, cp.size()))) + 1), h = ttfpreview::LineH(f);
@@ -134,7 +143,8 @@ inline SDL_Surface *TTF_RenderUTF8_Blended_Wrapped(TTF_Font *f, const char *text
         }
         lines.push_back({ start, end });
         if (end >= cp.size()) { break; }
-        start = end + 1;   /* past the space or newline */
+        start = end;
+        if (cp[start] == ' ' || cp[start] == '\n') { ++start; }
     }
     float wmax = 1;
     for (auto &l : lines) { wmax = std::max(wmax, ttfpreview::Width(f, cp, l.first, l.second)); }

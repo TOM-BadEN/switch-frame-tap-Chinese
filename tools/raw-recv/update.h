@@ -207,19 +207,19 @@ static int upd_check_main(void *arg)
     else snprintf(url, sizeof(url), "https://api.github.com/repos/%s/releases/latest", UPD_REPO);
     const int rc = upd_curl(url, json, 30);
     if (rc != 0) {
-        upd_fail(0, rc < 0 || rc == 127 ? "Could not run curl - check for updates on GitHub" : "GitHub could not be reached");
+        upd_fail(0, rc < 0 || rc == 127 ? "无法运行 curl，请到 GitHub 查看更新" : "无法连接 GitHub");
         return 0;
     }
     char *b = upd_read(json, NULL);
     remove(json);
-    if (!b) { upd_fail(0, "GitHub's answer could not be read"); return 0; }
+    if (!b) { upd_fail(0, "无法读取 GitHub 的响应"); return 0; }
     /* the highest version in the answer: GitHub lists releases by date, and
      * a fix release can come after the next version's betas */
     char tag[48] = "", t[48];
     for (const char *p = b; (p = upd_json_str(p, "tag_name", t, sizeof(t))) != NULL; ) {
         if (t[0] && (!tag[0] || sft_version_cmp(t, tag) > 0)) snprintf(tag, sizeof(tag), "%s", t);
     }
-    if (!tag[0]) { free(b); upd_tmp_clean(); upd_fail(0, "GitHub's answer has no release"); return 0; }
+    if (!tag[0]) { free(b); upd_tmp_clean(); upd_fail(0, "GitHub 响应中没有发布版本"); return 0; }
     if (sft_version_cmp(tag, SFT_VERSION) <= 0) { free(b); upd_tmp_clean(); upd_set(UPD_LATEST); return 0; }
     /* its asset for this platform: .../releases/download/<tag>/<name><suffix> */
     char want[96], u[600];
@@ -231,7 +231,7 @@ static int upd_check_main(void *arg)
         if (strstr(u, want) && n > sl && !strcmp(u + n - sl, suf)) { snprintf(g_upd.url, sizeof(g_upd.url), "%s", u); break; }
     }
     free(b);
-    if (!g_upd.url[0]) { upd_tmp_clean(); upd_fail(0, "The newest release has no viewer for this computer yet"); return 0; }
+    if (!g_upd.url[0]) { upd_tmp_clean(); upd_fail(0, "最新版本尚未提供适用于此电脑的客户端"); return 0; }
     snprintf(g_upd.tag, sizeof(g_upd.tag), "%s", tag);
     upd_set(UPD_FOUND);
     return 0;
@@ -309,29 +309,29 @@ static int upd_get_main(void *arg)
     char asset[1200], x[1200];
     snprintf(asset, sizeof(asset), "%s/update%s", g_upd_tmp, upd_asset_suffix());
     snprintf(x, sizeof(x), "%s/x", g_upd_tmp);
-    if (upd_curl(g_upd.url, asset, 900) != 0) { upd_fail(1, "The download did not finish - try again"); return 0; }
+    if (upd_curl(g_upd.url, asset, 900) != 0) { upd_fail(1, "下载未完成，请重试"); return 0; }
 #ifdef _WIN32
     wchar_t wx[1200], wself[1024];
     upd_widen(x, wx, 1200);
     CreateDirectoryW(wx, NULL);
     const char *tar[] = { "tar", "-xf", asset, "-C", x, NULL };
-    if (upd_run(tar) != 0) { upd_fail(1, "The download could not be unpacked (tar needs Windows 10 1803 or later)"); return 0; }
+    if (upd_run(tar) != 0) { upd_fail(1, "无法解压下载文件（tar 需要 Windows 10 1803 或更高版本）"); return 0; }
     /* x\switch-frame-tap-<ver>-windows-viewer\... over the folder this .exe is in */
     wchar_t pat[1300], src[1300];
     swprintf(pat, 1300, L"%ls\\switch-frame-tap-*", wx);
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(pat, &fd);
-    if (h == INVALID_HANDLE_VALUE) { upd_fail(1, "The download has no viewer in it"); return 0; }
+    if (h == INVALID_HANDLE_VALUE) { upd_fail(1, "下载文件中没有客户端"); return 0; }
     swprintf(src, 1300, L"%ls\\%ls", wx, fd.cFileName);
     FindClose(h);
     upd_widen(g_upd_self, wself, 1024);
     wchar_t *slash = wcsrchr(wself, L'\\');
     if (slash) *slash = 0;
-    if (!upd_swap_tree(src, wself)) { upd_fail(1, "Some files could not be replaced - is the folder read-only?"); return 0; }
+    if (!upd_swap_tree(src, wself)) { upd_fail(1, "部分文件无法替换，请检查目录是否只读"); return 0; }
 #elif defined(__APPLE__)
     mkdir(x, 0755);
     const char *ditto[] = { "ditto", "-x", "-k", asset, x, NULL };
-    if (upd_run(ditto) != 0) { upd_fail(1, "The download could not be unpacked"); return 0; }
+    if (upd_run(ditto) != 0) { upd_fail(1, "无法解压下载文件"); return 0; }
     char app[1300], next[1100], old[1100];
     snprintf(app, sizeof(app), "%s/Switch Frame Tap.app", x);
     snprintf(next, sizeof(next), "%s.new", g_upd_self);
@@ -340,8 +340,8 @@ static int upd_get_main(void *arg)
     upd_run(rmn);
     upd_run(rmo);
     const char *copy[] = { "ditto", app, next, NULL };
-    if (upd_run(copy) != 0) { upd_fail(1, "The new app could not be put beside the old one - is its folder read-only?"); return 0; }
-    if (rename(g_upd_self, old) != 0 || rename(next, g_upd_self) != 0) { upd_fail(1, "The app could not be replaced"); return 0; }
+    if (upd_run(copy) != 0) { upd_fail(1, "无法将新应用放入原应用目录，请检查目录是否只读"); return 0; }
+    if (rename(g_upd_self, old) != 0 || rename(next, g_upd_self) != 0) { upd_fail(1, "无法替换应用"); return 0; }
     upd_run(rmo);
 #else
     /* v0.7.17: an AppImage - the download is the new AppImage itself, put in
@@ -358,7 +358,7 @@ static int upd_get_main(void *arg)
         free(data);
         if (!wrote || chmod(next, 0755) != 0 || rename(next, g_upd_self) != 0) {
             remove(next);
-            upd_fail(1, "The AppImage could not be replaced - is its folder writable?");
+            upd_fail(1, "无法替换 AppImage，请检查目录是否可写");
             return 0;
         }
         upd_tmp_clean();
@@ -367,9 +367,9 @@ static int upd_get_main(void *arg)
     }
     mkdir(x, 0755);
     const char *tar[] = { "tar", "-xzf", asset, "-C", x, NULL };
-    if (upd_run(tar) != 0) { upd_fail(1, "The download could not be unpacked"); return 0; }
+    if (upd_run(tar) != 0) { upd_fail(1, "无法解压下载文件"); return 0; }
     char dir[1600], bin[1700], next[1100];
-    if (!upd_first_dir(x, "switch-frame-tap-", dir, sizeof(dir))) { upd_fail(1, "The download has no viewer in it"); return 0; }
+    if (!upd_first_dir(x, "switch-frame-tap-", dir, sizeof(dir))) { upd_fail(1, "下载文件中没有客户端"); return 0; }
     snprintf(bin, sizeof(bin), "%s/switch-frame-tap-viewer", dir);
     snprintf(next, sizeof(next), "%s.new", g_upd_self);
     long n = 0;
@@ -380,7 +380,7 @@ static int upd_get_main(void *arg)
     free(data);
     if (!wrote || chmod(next, 0755) != 0 || rename(next, g_upd_self) != 0) {
         remove(next);
-        upd_fail(1, "The viewer could not be replaced - is it installed where you can write?");
+        upd_fail(1, "无法替换客户端，请检查安装目录是否可写");
         return 0;
     }
 #endif
@@ -397,7 +397,7 @@ static void upd_check(void)
     if (s == UPD_CHECKING || s == UPD_GETTING || s == UPD_READY || s == UPD_UNSUPPORTED) return;
     upd_set(UPD_CHECKING);
     SDL_Thread *t = SDL_CreateThread(upd_check_main, "update-check", NULL);
-    if (t) SDL_DetachThread(t); else upd_fail(0, "Could not start the check");
+    if (t) SDL_DetachThread(t); else upd_fail(0, "无法开始检查");
 }
 
 static void upd_get(void)
@@ -405,7 +405,7 @@ static void upd_get(void)
     if (upd_state() != UPD_FOUND && !(upd_state() == UPD_ERROR && g_upd.failed_update)) return;
     upd_set(UPD_GETTING);
     SDL_Thread *t = SDL_CreateThread(upd_get_main, "update-get", NULL);
-    if (t) SDL_DetachThread(t); else upd_fail(1, "Could not start the download");
+    if (t) SDL_DetachThread(t); else upd_fail(1, "无法开始下载");
 }
 
 /* the new viewer starts; this one ends */
@@ -431,7 +431,7 @@ static void upd_restart(void)
     for (int fd = 3; fd < 4096; fd++) close(fd);
     execv(g_upd_self, g_upd_argv);
 #endif
-    upd_fail(1, "Restart the viewer to use the new version");
+    upd_fail(1, "请重启客户端以使用新版本");
 }
 
 /* at start-up: where this program is, the previous update's leftovers, and
@@ -442,7 +442,7 @@ static void upd_init(char **argv)
     upd_set(UPD_IDLE);
     const char *ver = SFT_VERSION;
     if (!strcmp(ver, "dev") || !upd_asset_suffix()) {
-        snprintf(g_upd.msg, sizeof(g_upd.msg), "Built from source - updates come with your build");
+        snprintf(g_upd.msg, sizeof(g_upd.msg), "当前为源码构建版本，请通过重新构建更新");
         upd_set(UPD_UNSUPPORTED);
         return;
     }
@@ -465,14 +465,14 @@ static void upd_init(char **argv)
         struct stat st;
         if (stat(old, &st) == 0) upd_run(rmo);
     } else {
-        snprintf(g_upd.msg, sizeof(g_upd.msg), "Not running from its .app - download updates from GitHub");
+        snprintf(g_upd.msg, sizeof(g_upd.msg), "当前未从 .app 中运行，请从 GitHub 下载更新");
         upd_set(UPD_UNSUPPORTED);
         return;
     }
 #else
     struct stat st;
     if (stat("/.flatpak-info", &st) == 0) {
-        snprintf(g_upd.msg, sizeof(g_upd.msg), "Installed with Flatpak - get the new .flatpak from the releases page");
+        snprintf(g_upd.msg, sizeof(g_upd.msg), "当前通过 Flatpak 安装，请从发布页下载新版 .flatpak");
         upd_set(UPD_UNSUPPORTED);
         return;
     }
@@ -483,7 +483,7 @@ static void upd_init(char **argv)
         snprintf(g_upd_self, sizeof(g_upd_self), "%s", appimage);
     } else {
         const ssize_t n = readlink("/proc/self/exe", g_upd_self, sizeof(g_upd_self) - 1);
-        if (n <= 0) { snprintf(g_upd.msg, sizeof(g_upd.msg), "Could not find this program"); upd_set(UPD_UNSUPPORTED); return; }
+        if (n <= 0) { snprintf(g_upd.msg, sizeof(g_upd.msg), "无法定位当前程序"); upd_set(UPD_UNSUPPORTED); return; }
         g_upd_self[n] = 0;
     }
     char next[1100];
@@ -519,12 +519,12 @@ static const char *upd_status(char *b, size_t cap)
 {
     if (g_upd_note_until && SDL_TICKS_PASSED(g_upd_note_until, SDL_GetTicks()) == 0) return g_upd_note;
     switch (upd_state()) {
-    case UPD_CHECKING: return "Checking GitHub...";
-    case UPD_LATEST: snprintf(b, cap, "Up to date (%s)", SFT_VERSION); return b;
-    case UPD_FOUND: snprintf(b, cap, "%s is available (you have %s)", g_upd.tag, SFT_VERSION); return b;
-    case UPD_GETTING: snprintf(b, cap, "Downloading %s...", g_upd.tag); return b;
-    case UPD_READY: snprintf(b, cap, "%s is installed - restart to use it", g_upd.tag); return b;
+    case UPD_CHECKING: return "正在检查 GitHub…";
+    case UPD_LATEST: snprintf(b, cap, "已是最新版本（%s）", SFT_VERSION); return b;
+    case UPD_FOUND: snprintf(b, cap, "可更新至 %s（当前为 %s）", g_upd.tag, SFT_VERSION); return b;
+    case UPD_GETTING: snprintf(b, cap, "正在下载 %s…", g_upd.tag); return b;
+    case UPD_READY: snprintf(b, cap, "已安装 %s，重启后生效", g_upd.tag); return b;
     case UPD_ERROR: case UPD_UNSUPPORTED: return g_upd.msg;
-    default: snprintf(b, cap, "Version %s", SFT_VERSION); return b;
+    default: snprintf(b, cap, "版本 %s", SFT_VERSION); return b;
     }
 }

@@ -125,6 +125,7 @@ P="$OUT/switch-frame-tap-$VER-linux"
 mkdir -p "$P/licenses"
 cp "$OUT/switch-frame-tap-viewer" "$HERE/70-switch-frame-tap.rules" "$HERE/switch-frame-tap.svg" "$P/"
 cp "$REPO/LICENSE" "$P/licenses/switch-frame-tap-GPL-2.0.txt"
+cp "$REPO/tools/raw-recv/fonts/HarmonyOS-Sans-LICENSE.txt" "$P/licenses/HarmonyOS-Sans-LICENSE.txt"
 cp "$REPO/third_party/fsr1/license.txt" "$P/licenses/AMD-FidelityFX-FSR1-MIT.txt"; cp "$REPO/third_party/nis/licence.txt" "$P/licenses/NVIDIA-Image-Scaling-MIT.txt"   # v0.7.11: the upscalers' shaders
 cp "$FF/COPYING.LGPLv2.1" "$P/licenses/FFmpeg-LGPL-2.1.txt"
 cp "$SDL/LICENSE.txt" "$P/licenses/SDL2-zlib.txt"

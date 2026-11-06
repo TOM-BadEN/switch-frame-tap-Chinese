@@ -139,7 +139,7 @@ namespace {
         if (k.size() >= 14) {
             std::string l = k.substr(0, 4) + "-" + k.substr(4, 2) + "-" + k.substr(6, 2) + "  " + k.substr(8, 2) + ":" + k.substr(10, 2) + ":" + k.substr(12, 2);
             if (k.size() >= 16 && k.substr(14, 2) != "00") { l += " (" + k.substr(14, 2) + ")"; }
-            if (BaseName(path).find("-SwitchFrameTap") != std::string::npos) { l += "  Album"; }
+            if (BaseName(path).find("-SwitchFrameTap") != std::string::npos) { l += "  相册"; }
             return l;
         }
         return BaseName(path);
@@ -197,15 +197,15 @@ namespace {
 
     /* ---- settings (config.ini) ------------------------------------------ */
 
-    const char *const QualityNames[]  = { "High", "Medium", "Low" };
+    const char *const QualityNames[]  = { "高", "中", "低" };
     const char *const ConnKeys[]      = { "usb", "webcam", "webcam-any", "network" };
-    const char *const ConnNames[]     = { "USB - PC viewer", "USB - webcam (OBS)", "USB - webcam (any app)", "Network" };
+    const char *const ConnNames[]     = { "USB - 电脑客户端", "USB - 摄像头（OBS）", "USB - 摄像头（通用）", "网络" };
     constexpr int ConnCount = 4, ConnNetwork = 3;
     const char *const QualityKeys[]   = { "high", "medium", "low" };
     const int KeyframeFrames[]        = { 30, 60, 120, 240 };
-    const char *const KeyframeNames[] = { "Every 0.5 s", "Every second", "Every 2 s", "Every 4 s" };
+    const char *const KeyframeNames[] = { "每 0.5 秒", "每秒", "每 2 秒", "每 4 秒" };
     const int DelaySeconds[]          = { 5, 10, 20, 30, 60 };
-    const char *const ComboNames[]    = { "L3 + R3 (click both sticks)", "L + R + D-pad Down", "ZL + ZR + D-pad Down", "Minus + D-pad Down", "Custom" };
+    const char *const ComboNames[]    = { "L3 + R3（按下双摇杆）", "L + R + 方向键下", "ZL + ZR + 方向键下", "Minus + 方向键下", "自定义" };
     constexpr int ComboCustom = 4;   /* v0.7.11: screenshot_custom */
 
     struct Settings {
@@ -496,24 +496,24 @@ namespace {
         std::string CustomComboText() const {
             char b[96];
             sft::shotbuttons::Format(set.shot_mask, set.shot_capture, b, sizeof(b));
-            if (b[0] == 0) { return "Custom (not recorded yet)"; }
+            if (b[0] == 0) { return "自定义（尚未录入）"; }
             std::string t = b;
             for (size_t i = 0; (i = t.find('+', i)) != std::string::npos; i += 3) { t.replace(i, 1, " + "); }
             return t;
         }
 
         void Saved() {
-            if (!SaveSettings(set)) { Toast("Could not write config.ini"); return; }
-            if (test_install) { Toast("Saved - but a test arm file is installed, so the sysmodule ignores config.ini"); return; }
-            if (have_status) { SftapReload(); Toast("Saved - the stream picks it up right away"); }
-            else { Toast("Saved - used from the next boot"); }
+            if (!SaveSettings(set)) { Toast("无法写入 config.ini"); return; }
+            if (test_install) { Toast("已保存，但存在测试启用文件，后台模块会忽略 config.ini"); return; }
+            if (have_status) { SftapReload(); Toast("已保存，立即生效"); }
+            else { Toast("已保存，下次开机生效"); }
         }
 
         /* the settings the sysmodule reads at boot only */
         void SavedForBoot(const char *what) {
-            if (!SaveSettings(set)) { Toast("Could not write config.ini"); return; }
-            Toast(test_install ? std::string("Saved - but a test arm file is installed, so the sysmodule ignores config.ini")
-                               : std::string("Saved - restart the console to ") + what);
+            if (!SaveSettings(set)) { Toast("无法写入 config.ini"); return; }
+            Toast(test_install ? std::string("已保存，但存在测试启用文件，后台模块会忽略 config.ini")
+                               : std::string("已保存，重启主机以") + what);
         }
 
         /* v0.4: the mode this boot is in (the sysmodule's word), else config.ini */
@@ -526,7 +526,7 @@ namespace {
         bool NetworkViewer() { return have_status && (st.reserved3 & 4) != 0; }
         std::string IpString() {
             u32 ip = 0;
-            if (R_FAILED(nifmGetCurrentIpAddress(&ip)) || ip == 0) { return "offline"; }
+            if (R_FAILED(nifmGetCurrentIpAddress(&ip)) || ip == 0) { return "离线"; }
             char b[20];
             std::snprintf(b, sizeof(b), "%u.%u.%u.%u", ip & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, ip >> 24);
             return b;
@@ -534,54 +534,54 @@ namespace {
 
         /* the status card: what the sysmodule is doing, and what to do next */
         std::string StateTitle() {
-            if (!installed) { return "Not installed"; }
+            if (!installed) { return "未安装"; }
             if (!running) {
-                if (!boot) { return "Off at boot"; }
-                return LowMemoryBoot() ? "Not started" : "Starting soon";
+                if (!boot) { return "未设置开机启动"; }
+                return LowMemoryBoot() ? "未启动" : "即将启动";
             }
-            if (!have_status) { return "Running"; }
+            if (!have_status) { return "运行中"; }
             switch (st.state) {
-                case 0: return "Starting";
-                case 1: return "Off";
-                case 2: return RunningWebcam() ? "Waiting for a camera app" : "Waiting for the viewer";
-                case 3: return "Waiting for a game";
-                case 4: return "Streaming";
-                case 5: return "Encoder stalled";
-                case 6: return "Test install";
-                case 7: return "Firmware not tested";
-                case 8: return "Not streaming this app";
-                default: return "Unknown";
+                case 0: return "启动中";
+                case 1: return "关闭";
+                case 2: return RunningWebcam() ? "等待摄像头应用连接" : "等待客户端连接";
+                case 3: return "等待游戏启动";
+                case 4: return "串流中";
+                case 5: return "编码器无响应";
+                case 6: return "测试安装";
+                case 7: return "固件未经测试";
+                case 8: return "当前应用不参与串流";
+                default: return "未知";
             }
         }
 
         std::string StateDetail() {
-            if (!installed) { return "Copy the Switch Frame Tap zip to the SD card and restart the console."; }
+            if (!installed) { return "将 Switch Frame Tap 压缩包解压至 SD 卡根目录，然后重启主机。"; }
             if (!running) {
-                if (!boot) { return "Turn on \"Start with the console\" below, then restart."; }
-                return LowMemoryBoot() ? "Other sysmodules use the memory it needs - see Setup."
-                                       : "It starts about 30 seconds after boot, once the HOME menu is up.";
+                if (!boot) { return "开启下方“开机启动”，然后重启主机。"; }
+                return LowMemoryBoot() ? "其他后台模块占用了所需内存，请查看“安装检查”。"
+                                       : "进入 HOME 菜单后，约在开机 30 秒时启动。";
             }
-            if (!have_status) { return "An older version answered - update the sysmodule."; }
+            if (!have_status) { return "检测到旧版后台模块，请更新。"; }
             char b[160];
             switch (st.state) {
-                case 0: return "It waits for a game.";
-                case 1: return "Turn on \"Stream to PC\" below to stream again.";
+                case 0: return "等待游戏启动。";
+                case 1: return "开启下方“串流到电脑”即可恢复串流。";
                 case 2:
-                    if (RunningWebcam()) { return "Open a camera app on the PC (OBS, Camera, a browser) and pick Switch Frame Tap."; }
+                    if (RunningWebcam()) { return "在电脑上打开 OBS、相机或浏览器等摄像头应用，选择 Switch Frame Tap。"; }
                     if (RunningNetwork()) {
-                        std::snprintf(b, sizeof(b), "Open the viewer on the PC, set it to Network and connect to %s.", IpString().c_str());
+                        std::snprintf(b, sizeof(b), "打开电脑客户端，选择网络连接，连接至 %s。", IpString().c_str());
                         return b;
                     }
-                    return "Open the viewer on the PC and connect the USB-C cable.";
-                case 3: return "Start a game to stream it.";
+                    return "打开电脑客户端，并连接 USB-C 数据线。";
+                case 3: return "启动游戏即可开始串流。";
                 case 4:
                     std::snprintf(b, sizeof(b), "%u x %u%s", st.width, st.height,
-                                  NetworkViewer() ? " over the network" : RunningWebcam() ? " to the camera app" : " over USB");
+                                  NetworkViewer() ? " · 网络" : RunningWebcam() ? " · 摄像头应用" : " · USB");
                     return b;
-                case 5: return "Restart the console to stream again.";
-                case 6: return "Live mode is not on in the test arm file.";
-                case 7: return "Streaming is off on this firmware - see Setup, Allow untested firmware.";
-                case 8: return "It is on the never-streamed list (Stream, Apps never streamed).";
+                case 5: return "请重启主机以恢复串流。";
+                case 6: return "测试启用文件中未启用实时串流。";
+                case 7: return "当前固件未启用串流，请查看“安装检查 → 允许未经测试的固件”。";
+                case 8: return "当前应用已排除，请查看“串流 → 排除的应用”。";
                 default: return "";
             }
         }
@@ -595,9 +595,9 @@ namespace {
 
         std::string ConnShort() {
             switch (RunningConn()) {
-                case 1: return "Webcam (OBS)";
-                case 2: return "Webcam (any app)";
-                case ConnNetwork: return "Network  " + IpString();
+                case 1: return "摄像头（OBS）";
+                case 2: return "摄像头（通用）";
+                case ConnNetwork: return "网络  " + IpString();
                 default: return "USB";
             }
         }
@@ -606,68 +606,68 @@ namespace {
 
         void SetStream(bool on) {
             if (have_status) {
-                if (!SftapSetEnabled(on)) { Toast("The sysmodule did not answer"); }
-                else { Toast(on ? "Streaming turned on" : "Streaming turned off"); }
+                if (!SftapSetEnabled(on)) { Toast("后台模块未响应"); }
+                else { Toast(on ? "已开启串流" : "已关闭串流"); }
             } else {
                 mkdir("sdmc:/config", 0777);
                 mkdir(ConfigDir, 0777);
                 if (on) { std::remove(StreamOff); } else { TouchFile(StreamOff); }
-                Toast(on ? "Streaming on from the next boot" : "Streaming off from the next boot");
+                Toast(on ? "下次开机将开启串流" : "下次开机将关闭串流");
             }
         }
 
         void SetBoot(bool on) {
-            if (!installed) { Toast("The sysmodule is not installed"); return; }
+            if (!installed) { Toast("未安装后台模块"); return; }
             std::remove(OldBootFlag);
             if (on) {
                 mkdir(LauncherDir, 0777);
                 mkdir((std::string(LauncherDir) + "/flags").c_str(), 0777);
-                if (!TouchFile(BootFlag)) { Toast("Could not write the boot flag"); return; }
+                if (!TouchFile(BootFlag)) { Toast("无法写入开机启动标记"); return; }
             } else {
                 std::remove(BootFlag);
             }
-            Toast(on ? "Starts with the console from the next boot" : "Will not start at the next boot");
+            Toast(on ? "下次开机将自动启动" : "下次开机将不再自动启动");
         }
 
         std::string FwText() {
             char b[64];
-            std::snprintf(b, sizeof(b), "%u.%u.%u%s", HOSVER_MAJOR(fw), HOSVER_MINOR(fw), HOSVER_MICRO(fw), FwTested() ? "" : " - untested");
+            std::snprintf(b, sizeof(b), "%u.%u.%u%s", HOSVER_MAJOR(fw), HOSVER_MINOR(fw), HOSVER_MICRO(fw), FwTested() ? "" : " · 未经测试");
             return b;
         }
         bool FwTested() { return HOSVER_MAJOR(fw) >= 21 && HOSVER_MAJOR(fw) <= 23; }
         std::string AmsText() {
-            if (ams == 0) { return "Unknown"; }
+            if (ams == 0) { return "未知"; }
             char b[48];
             std::snprintf(b, sizeof(b), "%u.%u.%u", static_cast<u32>((ams >> 56) & 0xFF), static_cast<u32>((ams >> 48) & 0xFF), static_cast<u32>((ams >> 40) & 0xFF));
             return b;
         }
 
-        static std::string Check(bool ok) { return ok ? "Installed" : "Not found"; }
+        static std::string Check(bool ok) { return ok ? "已安装" : "未找到"; }
 
         void Build() {
             pages.clear();
             ReadLauncher();
             const std::string boot_help =
-                "Whether the sysmodule starts with the console - about 30 s after boot, once the HOME menu is up, and only if "
-                "the other sysmodules leave it the memory it needs. Takes effect at the next boot. "
-                "Off is the clean way to disable it completely.";
+                "是否随主机开机启动：进入 HOME 菜单后，约在开机 30 秒时启动，且需要"
+                "其他后台模块留有足够内存。下次开机生效。"
+                "关闭此项可彻底停用后台模块。";
 
             /* ---- Home ---- */
             {
-                Page p{ "Home", {} };
+                Page p{ "主页", {} };
                 p.rows.push_back({ Kind::Hero, "", nullptr, nullptr, nullptr, "", nullptr, {} });
-                p.rows.push_back(Toggle("Stream to PC", [this] { return StreamOn(); }, [this](int) { SetStream(!StreamOn()); },
-                    "Off: the sysmodule leaves the game alone (no debugging, cheats work) and sends nothing. "
-                    "The same switch as in the overlay; it is remembered across reboots."));
-                p.rows.push_back(Toggle("Start with the console", [this] { return installed && boot; }, [this](int) { SetBoot(!boot); }, boot_help,
-                    [this] { return installed ? std::string() : std::string("Not installed"); }, [] { return ui::Bad; }));
+                p.rows.push_back(Toggle("串流到电脑", [this] { return StreamOn(); }, [this](int) { SetStream(!StreamOn()); },
+                    "关闭后，后台模块不再附加游戏（不调试，金手指可正常使用），也不发送数据。"
+                    "与悬浮菜单中的开关同步，重启后仍保留设置。"));
+                p.rows.push_back(Toggle("开机启动", [this] { return installed && boot; }, [this](int) { SetBoot(!boot); }, boot_help,
+                    [this] { return installed ? std::string() : std::string("未安装"); }, [] { return ui::Bad; }));
                 p.rows.push_back({ Kind::Tiles, "", nullptr, nullptr, nullptr, "", nullptr, {
-                    { "Firmware", [this] { return FwText(); }, [this] { return FwTested() ? ui::Ink : ui::Warn; } },
+                    { "系统固件", [this] { return FwText(); }, [this] { return FwTested() ? ui::Ink : ui::Warn; } },
                     { "Atmosphere", [this] { return AmsText(); }, nullptr },
-                    { "Free memory at boot", [this] { return free_mem.empty() ? std::string("-") : free_mem; }, nullptr },
-                    { "Screenshots", [this] {
+                    { "启动时可用内存", [this] { return free_mem.empty() ? std::string("-") : free_mem; }, nullptr },
+                    { "截图", [this] {
                           char b[32];
-                          std::snprintf(b, sizeof(b), "%zu saved", shot_files);
+                          std::snprintf(b, sizeof(b), "已保存 %zu 张", shot_files);
                           return std::string(b);
                       }, nullptr },
                 } });
@@ -676,205 +676,160 @@ namespace {
 
             /* ---- Stream ---- */
             {
-                Page p{ "Stream", {} };
-                p.rows.push_back(Choice("Connection", [this] {
+                Page p{ "串流", {} };
+                p.rows.push_back(Choice("连接方式", [this] {
                         std::string v = ConnNames[set.conn];
-                        if (have_status && RunningConn() != set.conn) { v += " - after a restart"; }
+                        if (have_status && RunningConn() != set.conn) { v += " · 重启后生效"; }
                         else if (set.conn == ConnNetwork) { v += "  " + IpString(); }
                         return v;
                     },
                     [this](int d) {
                         set.conn = (set.conn + (d > 0 ? 1 : ConnCount - 1)) % ConnCount;
-                        SavedForBoot("switch the connection");
+                        SavedForBoot("切换连接方式");
                     },
-                    "How the stream reaches the PC - one at a time. USB - PC viewer: the viewer app over the USB-C cable "
-                    "(handheld; sound, the lowest latency). USB - webcam (OBS): the Switch shows up as a USB camera, "
-                    "H.264 up to 1080p60, for OBS - picture only. USB - webcam (any app): an uncompressed camera the "
-                    "Windows Camera app, browsers, Discord or Zoom can open - 720p at 25 fps or 432p at 60. Network: the viewer "
-                    "app over Wi-Fi or the dock's LAN port, so you can play docked; set the viewer to Network too. A LAN adapter "
-                    "or strong 5 GHz Wi-Fi at Medium quality works best. Changes need a restart.",
+                    "选择画面传输方式，一次只能使用一种。USB - 电脑客户端：通过 USB-C 数据线连接，限掌机模式，支持声音且延迟最低。USB - 摄像头（OBS）：主机作为 USB 摄像头，提供最高 1080p60 的 H.264 画面，不含声音。USB - 摄像头（通用）：提供未压缩画面，可供 Windows 相机、浏览器、Discord、Zoom 等使用，支持 720p25 或 432p60。网络：通过 Wi-Fi 或底座 LAN 接口连接，支持底座模式；电脑客户端也需选择网络。建议使用有线网络，或信号良好的 5 GHz Wi-Fi 配合中等画质。更改后需重启主机。",
                     [this] { return (have_status && RunningConn() != set.conn) ? ui::Warn : ui::Ink; }));
-                p.rows.push_back(Toggle("Game audio", [this] { return set.audio; }, [this](int) { set.audio = !set.audio; Saved(); },
-                    "Sends the game's sound to the PC viewer (M in the viewer mutes it). It comes from the console's own video "
-                    "recorder, as with SysDVR - games that turn video capture off have no sound in the stream unless "
-                    "\"Sound in no-record games\" is on. Webcam mode has no sound: a USB camera cannot carry it from the Switch.",
+                p.rows.push_back(Toggle("游戏音频", [this] { return set.audio; }, [this](int) { set.audio = !set.audio; Saved(); },
+                    "将游戏声音传输至电脑客户端（客户端按 M 静音）。与 SysDVR 一样，音频来自主机的系统录制功能。禁止视频录制的游戏需要开启“采集禁用录制游戏的声音”才有声音。摄像头模式不支持声音，因为 Switch 的 USB 摄像头接口无法同时传输音频。",
                     [this] {
                         if (!set.audio || !have_status || st.version < 4) { return std::string(); }
                         switch (st.reserved & 0xFF) {
-                            case 1: return std::string("Playing");
-                            case 2: return std::string("Recorder unavailable");
-                            case 3: return std::string("Could not start");
+                            case 1: return std::string("播放中");
+                            case 2: return std::string("系统录制不可用");
+                            case 3: return std::string("无法启动");
                             default: return std::string();
                         }
                     },
                     [this] { return (st.reserved & 0xFF) >= 2 ? ui::Warn : ui::Good; }));
-                p.rows.push_back(Toggle("Sound in no-record games", [this] { return sound == sftsound::State::On; },
+                p.rows.push_back(Toggle("采集禁用录制游戏的声音", [this] { return sound == sftsound::State::On; },
                     [this](int) {
-                        if (sound == sftsound::State::Missing) { Toast("The patches are not on the SD card - reinstall the Switch Frame Tap zip"); return; }
+                        if (sound == sftsound::State::Missing) { Toast("SD 卡中缺少补丁，请重新安装 Switch Frame Tap 压缩包"); return; }
                         const bool on = sound != sftsound::State::On;
-                        if (sftsound::Set(on)) { sound_changed = !sound_changed; Toast(on ? "On - restart the console to apply" : "Off - restart the console to apply"); }
-                        else { Toast("Could not change it - check the SD card"); }
+                        if (sftsound::Set(on)) { sound_changed = !sound_changed; Toast(on ? "已开启，重启主机生效" : "已关闭，重启主机生效"); }
+                        else { Toast("修改失败，请检查 SD 卡"); }
                     },
-                    "Some games turn the console's video recorder off (Super Smash Bros. Ultimate, for one), and with it the "
-                    "sound the stream gets. This turns on dvr-patches (by exelix11, bundled): they let the recorder run for "
-                    "every game, so their sound comes through. Off by default; a restart applies it. Turn it off again if a "
-                    "game crashes with it on (a crash report for 0100000000000023).",
-                    [this] { return sound == sftsound::State::Missing ? std::string("Not installed") : sound_changed ? std::string("Restart to apply") : std::string(); },
+                    "部分游戏（例如《任天堂明星大乱斗 特别版》）会禁用系统录制，同时导致串流无法获得声音。开启后将启用内置的 dvr-patches（作者 exelix11），允许系统录制在所有游戏中运行以获取音频。默认关闭，重启后生效。若开启后游戏崩溃（崩溃报告为 0100000000000023），请关闭此项。",
+                    [this] { return sound == sftsound::State::Missing ? std::string("未安装") : sound_changed ? std::string("重启后生效") : std::string(); },
                     [] { return ui::Warn; }));
-                p.rows.push_back(Toggle("Screen off while streaming", [this] { return set.screen_off; }, [this](int) { set.screen_off = !set.screen_off; Saved(); },
-                    "Turns the Switch's own screen dark while the stream runs, to save battery when you play on the PC. "
-                    "It comes back on the moment the stream stops: close the viewer, press HOME, or switch the stream "
-                    "off. Handheld only - a TV is not affected."));
-                p.rows.push_back(Action("Apps never streamed", [this] {
+                p.rows.push_back(Toggle("串流时关闭主机屏幕", [this] { return set.screen_off; }, [this](int) { set.screen_off = !set.screen_off; Saved(); },
+                    "串流时关闭 Switch 自身屏幕，节省在电脑上游玩时的电量。串流停止后立即恢复亮屏，例如关闭客户端、按 HOME 或关闭串流。仅限掌机模式，不影响电视画面。"));
+                p.rows.push_back(Action("排除的应用", [this] {
                         char b[32];
-                        std::snprintf(b, sizeof(b), confirm_clear ? "Press A to clear" : excluded == 1 ? "1 app" : "%zu apps", excluded);
+                        std::snprintf(b, sizeof(b), confirm_clear ? "按 A 清空" : excluded == 1 ? "1 个应用" : "%zu 个应用", excluded);
                         return std::string(b);
                     },
                     [this](int) {
-                        if (excluded == 0) { Toast("No app is excluded"); return; }
+                        if (excluded == 0) { Toast("没有排除的应用"); return; }
                         if (!confirm_clear) { confirm_clear = true; return; }
                         confirm_clear = false;
                         std::remove(ExclFile);
                         if (have_status) { SftapReload(); }
-                        Toast("Every app is streamed again");
+                        Toast("已清空排除列表");
                     },
-                    "Apps that refuse to run under a debugger - such as TiCo's protected builds - need the sysmodule to leave "
-                    "them alone. Turn \"Stream this app\" off in the overlay while one runs, and it is never attached again "
-                    "(no stream, no screenshots). A here clears the list.",
+                    "部分应用（例如 TiCo 加保护的版本）无法在调试器附加时运行，需要后台模块避开它们。运行此类应用时，在悬浮菜单中关闭“串流当前应用”，之后将不再附加该应用，也不提供串流或截图。此处按 A 可清空排除列表。",
                     [this] { return confirm_clear ? ui::Warn : ui::Dim; }));
                 pages.push_back(std::move(p));
             }
 
             /* ---- Picture ---- */
             {
-                Page p{ "Picture", {} };
-                p.rows.push_back(Choice("Quality", [this] { return std::string(QualityNames[set.quality]); },
+                Page p{ "画面", {} };
+                p.rows.push_back(Choice("画质", [this] { return std::string(QualityNames[set.quality]); },
                     [this](int d) { set.quality = (set.quality + (d > 0 ? 1 : 2)) % 3; Saved(); },
-                    "High is the sharpest picture: about 80 Mbps in a fast 1080p race, so a recording from the PC viewer "
-                    "takes about 600 MB a minute. Medium is roughly half that and Low about a third, still clean. "
-                    "Calm games and 720p need much less. Lower it if the stream stutters on a slow cable or PC."));
-                p.rows.push_back(Choice("Keyframes", [this] { return std::string(KeyframeNames[set.keyframe]); },
+                    "高画质最清晰：在快速运动的 1080p 赛车游戏中，码率约为 80 Mbps，电脑端录像每分钟约占 600 MB。中画质约为一半，低画质约为三分之一，仍有较好的清晰度。静态较多的游戏和 720p 所需带宽更低。若数据线或电脑性能不足导致卡顿，可降低画质。"));
+                p.rows.push_back(Choice("关键帧", [this] { return std::string(KeyframeNames[set.keyframe]); },
                     [this](int d) { set.keyframe = (set.keyframe + (d > 0 ? 1 : 3)) % 4; Saved(); },
-                    "A keyframe is a complete picture; the frames between only carry changes. More keyframes recover faster "
-                    "from a glitch, fewer save bandwidth."));
-                p.rows.push_back(Choice("Maximum resolution", [this] { return std::string(set.cap720 ? "720p" : "1080p (native)"); },
+                    "关键帧包含完整画面，帧间仅传输变化部分。关键帧越频繁，异常后恢复越快；间隔越长，越节省带宽。"));
+                p.rows.push_back(Choice("最高分辨率", [this] { return std::string(set.cap720 ? "720p" : "1080p（原生）"); },
                     [this](int) { set.cap720 = !set.cap720; Saved(); },
-                    "1080p streams what the game renders in docked mode (with ReverseNX-RT in handheld). 720p scales it down: "
-                    "less bandwidth, and it runs at stock clocks."));
-                p.rows.push_back(Toggle("Faster memory while streaming", [this] { return set.mem_boost; },
+                    "1080p 传输游戏在底座模式下的画面（掌机模式需配合 ReverseNX-RT）。720p 会缩小画面，带宽需求更低，并可在默认频率下运行。"));
+                p.rows.push_back(Toggle("串流时提升内存频率", [this] { return set.mem_boost; },
                     [this](int) { set.mem_boost = !set.mem_boost; Saved(); },
-                    "Runs the console's memory at 1600 MHz - the docked speed - while a stream runs, so heavy games are "
-                    "copied faster and stream at a higher frame rate on stock clocks. Uses a little more battery. Does "
-                    "nothing if an overclock already runs it faster. From the next stream."));
-                p.rows.push_back(Toggle("Scale other docked sizes up to 1080p", [this] { return set.scale1080; },
+                    "串流时将内存频率提升至 1600 MHz（底座频率），以加快高负载游戏的画面复制，提高默认 CPU/GPU 频率下的串流 FPS，会略微增加耗电。若已有超频工具将内存设得更高，则不作调整。下次串流生效。"));
+                p.rows.push_back(Toggle("将其他底座分辨率放大至 1080p", [this] { return set.scale1080; },
                     [this](int) { set.scale1080 = !set.scale1080; Saved(); },
-                    "Some games draw docked at a size between 720p and 1080p - Super Mario Odyssey at 1600x900. They stream at "
-                    "720p by default; on, they are scaled up to 1080p, which can look better on a big screen but needs more "
-                    "bandwidth and adds a frame of latency. From the next stream."));
+                    "部分游戏在底座模式下的分辨率介于 720p 与 1080p 之间，例如《超级马力欧 奥德赛》的 1600x900。默认会缩小至 720p；开启后改为放大至 1080p，大屏幕上可能更清晰，但会增加带宽需求及一帧延迟。下次串流生效。"));
                 pages.push_back(std::move(p));
             }
 
             /* ---- Screenshots ---- */
             {
-                Page p{ "Screenshots", {} };
-                p.rows.push_back(Toggle("Screenshot button", [this] { return set.shot; }, [this](int) { set.shot = !set.shot; Saved(); },
-                    "Press the button combo in any game to save the picture at the game's own resolution (1920x1080 "
-                    "docked or with ReverseNX-RT, 1280x720 handheld) as a PNG. Works with or without the PC viewer; the PC "
-                    "stream pauses briefly while it saves. With the Ultrahand overlay menu installed, a notification confirms each one."));
-                p.rows.push_back(Choice("Buttons", [this] { return set.shot_combo == ComboCustom ? CustomComboText() : std::string(ComboNames[set.shot_combo]); },
+                Page p{ "截图", {} };
+                p.rows.push_back(Toggle("启用截图快捷键", [this] { return set.shot; }, [this](int) { set.shot = !set.shot; Saved(); },
+                    "在游戏中按下组合键，以游戏原始分辨率保存 PNG 截图（底座模式或使用 ReverseNX-RT 时为 1920x1080，掌机模式为 1280x720）。无需打开电脑客户端；保存时串流会短暂停顿。安装 Ultrahand 悬浮菜单后，每次截图均有保存通知。"));
+                p.rows.push_back(Choice("按键组合", [this] { return set.shot_combo == ComboCustom ? CustomComboText() : std::string(ComboNames[set.shot_combo]); },
                     [this](int d) { set.shot_combo = (set.shot_combo + (d > 0 ? 1 : ComboCustom)) % (ComboCustom + 1); Saved(); },
-                    "Hold these together to take a screenshot. Pick a combo your game does not use - L3 + R3 (pressing both "
-                    "sticks in) is rarely used by games. Custom: your own buttons (below)."));
-                p.rows.push_back(Action("Record your own buttons", [this] {
-                        return set.shot_combo == ComboCustom ? std::string("Press A, then hold them") : std::string("For Custom");
+                    "同时按下这些按键即可截图。请选择游戏中不会用到的组合，例如较少被游戏使用的 L3 + R3（按下双摇杆）。“自定义”可使用下方录入的组合。"));
+                p.rows.push_back(Action("录入自定义组合", [this] {
+                        return set.shot_combo == ComboCustom ? std::string("按 A 后按住所需按键") : std::string("用于自定义组合");
                     }, [](int) { g_record_combo = true; },
-                    "Record your own screenshot combo: press A here, then hold the buttons you want together for two "
-                    "seconds. Add the Capture button with the next setting - pressing it here would take a picture of this app."));
-                p.rows.push_back(Toggle("Custom combo with Capture", [this] { return set.shot_combo == ComboCustom && set.shot_capture; },
+                    "在此按 A，然后同时按住所需按键两秒，即可录入截图组合。若需加入截图键，请使用下一项设置；在此按下截图键会截取当前应用画面。"));
+                p.rows.push_back(Toggle("自定义组合包含截图键", [this] { return set.shot_combo == ComboCustom && set.shot_capture; },
                     [this](int) { set.shot_combo = ComboCustom; set.shot_capture = !set.shot_capture; Saved(); },
-                    "The Capture button (the square one) as part of the combo - for example ZR + Capture. The console still "
-                    "takes its own screenshot (a JPEG in the Album) when you press it, so you get both: the system's and this "
-                    "native-resolution PNG. Capture on its own also works: every system screenshot then gets a PNG too."));
-                p.rows.push_back(Choice("Save to", [this] { return std::string(set.shot_album ? "With the system's screenshots" : "Switch Frame Tap folder"); },
+                    "将截图键（方形按键）加入组合，例如 ZR + Capture。按下时系统仍会生成相册 JPEG，同时保存本应用的原生分辨率 PNG。也可仅使用截图键，此时每次系统截图都会额外保存 PNG。"));
+                p.rows.push_back(Choice("保存位置", [this] { return std::string(set.shot_album ? "系统截图目录" : "Switch Frame Tap 目录"); },
                     [this](int) { set.shot_album = !set.shot_album; Saved(); },
-                    "Where the screenshots go. With the system's screenshots: the same Album folder on the SD card as the "
-                    "console's own (Nintendo/Album/year/month/day - under emuMMC, its own Nintendo folder), named by date so a "
-                    "PC lists them together. The Switch's Album app does not show them (it only shows Nintendo's own JPEGs); "
-                    "this app's screenshot viewer does. Switch Frame Tap folder: /switch/switch-frame-tap/screenshots."));
-                p.rows.push_back(Action("View screenshots", [this] {
+                    "选择截图保存位置。“系统截图目录”：与系统截图存于 SD 卡同一相册目录（Nintendo/Album/年/月/日；emuMMC 使用其自身的 Nintendo 目录），按日期命名，方便在电脑中一起查看。系统相册仅显示任天堂 JPEG，无法显示这些 PNG，但本应用的截图浏览器可以查看。“Switch Frame Tap 目录”：/switch/switch-frame-tap/screenshots。"));
+                p.rows.push_back(Action("查看截图", [this] {
                         char b[32];
-                        std::snprintf(b, sizeof(b), "%zu saved", shot_files);
+                        std::snprintf(b, sizeof(b), "已保存 %zu 张", shot_files);
                         return std::string(b);
                     }, [](int) { g_open_gallery = true; },
-                    "Browse the screenshots on the SD card: A shows one full screen (Left/Right for the others), Y deletes."));
-                p.rows.push_back(Info("Taken this boot", [this] {
+                    "浏览 SD 卡上的截图：A 全屏查看，左右切换图片，Y 删除。"));
+                p.rows.push_back(Info("本次开机截图", [this] {
                         if (!have_status || st.version < 2) { return std::string("-"); }
                         char b[48];
-                        std::snprintf(b, sizeof(b), st.shot_fails ? "%u (%u failed)" : "%u", st.shots, st.shot_fails);
+                        std::snprintf(b, sizeof(b), st.shot_fails ? "%u 张（%u 张失败）" : "%u", st.shots, st.shot_fails);
                         return std::string(b);
                     }, [this] { return (have_status && st.version >= 2 && st.shot_fails) ? ui::Warn : ui::Dim; },
-                    "Screenshots saved since the console started. Each 1080p PNG is about 6 MB (stored uncompressed, "
-                    "exactly the pixels the game drew)."));
+                    "本次开机以来保存的截图。每张 1080p PNG 约占 6 MB，采用未压缩存储，完整保留游戏画面像素。"));
                 pages.push_back(std::move(p));
             }
 
             /* ---- Beta ---- */
             {
-                Page p{ "Beta", {} };
-                p.rows.push_back(Section("Read at boot - restart the console after a change"));
-                p.rows.push_back(Toggle("Stream the HOME menu", [this] { return set.home_menu; },
-                    [this](int) { set.home_menu = !set.home_menu; SavedForBoot("apply it"); },
-                    "Also streams the HOME menu and the system screens when no game is on screen: the HOME menu itself, "
-                    "System Settings, the user picker, Controllers, My Page, the Album and the Homebrew Menu. "
-                    "No sound outside games yet.",
-                    [this] { return (have_status && RunningHomeMenu() != set.home_menu) ? std::string("Restart to apply") : std::string(); },
+                Page p{ "实验功能", {} };
+                p.rows.push_back(Section("开机时读取，修改后请重启主机"));
+                p.rows.push_back(Toggle("串流 HOME 菜单", [this] { return set.home_menu; },
+                    [this](int) { set.home_menu = !set.home_menu; SavedForBoot("使设置生效"); },
+                    "未显示游戏时，也串流 HOME 菜单和系统界面，包括系统设置、用户选择、控制器、我的主页、相册和 Homebrew Menu。目前游戏外的界面暂无声音。",
+                    [this] { return (have_status && RunningHomeMenu() != set.home_menu) ? std::string("重启后生效") : std::string(); },
                     [] { return ui::Warn; }));
-                p.rows.push_back(Toggle("Stream the overlays", [this] { return set.overlays; },
-                    [this](int) { set.overlays = !set.overlays; SavedForBoot("apply it"); },
-                    "Puts the console's overlays in the stream, on top of the game: the volume bar, the quick settings "
-                    "(hold HOME), the power menu (hold POWER) and Tesla / Ultrahand menus. They are copied 10-20 times a "
-                    "second, so they move less smoothly than the game, and the power menu is a little soft.",
-                    [this] { return (have_status && RunningOverlays() != set.overlays) ? std::string("Restart to apply") : std::string(); },
+                p.rows.push_back(Toggle("串流悬浮界面", [this] { return set.overlays; },
+                    [this](int) { set.overlays = !set.overlays; SavedForBoot("使设置生效"); },
+                    "在串流游戏画面上叠加主机的悬浮界面，包括音量条、快捷设置（长按 HOME）、电源菜单（长按 POWER）和 Tesla / Ultrahand 菜单。每秒复制 10–20 次，因此流畅度低于游戏，电源菜单也会略显模糊。",
+                    [this] { return (have_status && RunningOverlays() != set.overlays) ? std::string("重启后生效") : std::string(); },
                     [] { return ui::Warn; }));
                 /* v0.7.18 */
-                p.rows.push_back(Section("From the next app you start"));
-                p.rows.push_back(Toggle("Homebrew in docked mode (1080p)", [this] { return set.hb_docked; },
+                p.rows.push_back(Section("下次启动应用时生效"));
+                p.rows.push_back(Toggle("自制应用使用底座模式（1080p）", [this] { return set.hb_docked; },
                     [this](int) { set.hb_docked = !set.hb_docked; Saved(); },
-                    "Tells homebrew started by holding R over a game, or from a forwarder on the HOME menu, that the console is docked, so "
-                    "apps that choose their resolution from that - SDL2 ports, emulators - draw at 1080p and stream at "
-                    "1080p. The console's screen still shows them. Apps with a fixed 1280x720 picture stay 720p. "
-                    "Not for homebrew opened from the Album: there it has too little memory for 1080p."));
+                    "对按住 R 启动游戏或通过 HOME 菜单前端打开的自制应用报告底座模式，使按模式选择分辨率的应用（例如 SDL2 移植和模拟器）以 1080p 绘制并串流；主机屏幕仍正常显示。固定使用 1280x720 的应用不受影响。从相册打开的自制应用不适用，因为该模式的内存不足以支持 1080p。"));
                 /* v0.7.20 */
-                p.rows.push_back(Section("Right away"));
-                p.rows.push_back(Toggle("Controls from the viewer", [this] { return set.viewer_input; },
+                p.rows.push_back(Section("立即生效"));
+                p.rows.push_back(Toggle("允许客户端控制", [this] { return set.viewer_input; },
                     [this](int) { set.viewer_input = !set.viewer_input; Saved(); },
-                    "A controller, the keyboard or the mouse of the PC play the Switch through the PC viewer, and a controller on the "
-                    "phone or TV through the Android app: they show up here as one more Pro Controller while the viewer is open, "
-                    "over USB or the network, in games and the HOME menu. "
-                    "Which of them play, and what each key does, is set in the viewer's Controller menu (top left, or G) "
-                    "and in the Android app's Settings. "
-                    "If a game only listens to one controller, pick it in Controllers > Change Grip/Order. "
-                    "The viewer needs version 0.7.20 or later."));
+                    "允许电脑客户端的手柄、键盘和鼠标，以及安卓客户端连接的手柄操作 Switch。客户端打开时，它们会作为一个额外的 Pro 控制器，可通过 USB 或网络在游戏及 HOME 菜单中使用。在电脑客户端左上角“控制器”（或按 G）及安卓客户端设置中选择输入设备和按键映射。若游戏只接受一个控制器，请在“控制器 → 更改握法/顺序”中选择。需要客户端 0.7.20 或更高版本。"));
                 pages.push_back(std::move(p));
             }
 
             /* ---- Extras (v0.7.5: the optional tools, from their authors' GitHub releases) ---- */
             {
-                Page p{ "Extras", {} };
-                p.rows.push_back(Section("Downloaded from each tool's GitHub release"));
+                Page p{ "扩展工具", {} };
+                p.rows.push_back(Section("从各工具的 GitHub 发布页下载"));
                 auto extra = [this, &p](const extras::Tool *t, bool (*has)(), std::function<std::string()> note, std::function<std::string()> blocked, const char *help) {
                     const int idx = static_cast<int>(p.rows.size());
                     p.rows.push_back(Action(t->name, [this, idx, has, note, blocked] {
-                            if (confirm_extra == idx) { return std::string(has() ? "A again: update" : "A again: install"); }
+                            if (confirm_extra == idx) { return std::string(has() ? "再按 A 更新" : "再按 A 安装"); }
                             const std::string b = blocked();
                             if (!b.empty()) { return b; }
-                            if (!has()) { return std::string("Not installed"); }
+                            if (!has()) { return std::string("未安装"); }
                             const std::string n = note();
-                            return n.empty() ? std::string("Installed") : n;
+                            return n.empty() ? std::string("已安装") : n;
                         },
                         [this, idx, t, blocked](int) {
                             const std::string b = blocked();
-                            if (!b.empty()) { Toast(b + " - one overclock tool at a time: remove it first"); return; }
+                            if (!b.empty()) { Toast(b + " · 只能安装一个超频工具，请先移除现有工具"); return; }
                             if (confirm_extra != idx) { confirm_extra = idx; return; }
                             confirm_extra = -1;
                             g_pending_install = t;
@@ -887,125 +842,104 @@ namespace {
                 };
                 auto none = [] { return std::string(); };
                 extra(&extras::Ultrahand, extras::HasUltrahand, none, none,
-                      "The overlay menu (L + D-pad Down + right stick): Switch Frame Tap's overlay and the \"Screenshot saved\" "
-                      "notes need it. Includes nx-ovlloader; replaces Tesla Menu if you have it. Your Ultrahand settings are kept "
-                      "on an update. From github.com/ppkantorski/Ultrahand-Overlay.");
+                      "悬浮菜单（L + 方向键下 + 右摇杆）：Switch Frame Tap 悬浮界面与截图保存通知需要此工具。包含 nx-ovlloader；若已安装 Tesla Menu，会将其替换。更新会保留 Ultrahand 设置。来源：github.com/ppkantorski/Ultrahand-Overlay。");
                 extra(&extras::SaltyNX, extras::HasSaltyNX, none, none,
-                      "Needed by ReverseNX-RT: it loads plugins into games. It can clash with some game mods (modded Smash with "
-                      "Skyline crashed in testing) - if a game crashes, turn SaltyNX off. From github.com/masagrator/SaltyNX.");
+                      "ReverseNX-RT 所需的游戏插件加载器。可能与部分游戏 MOD 冲突（测试中使用 Skyline 的大乱斗 MOD 曾发生崩溃），若游戏崩溃请停用 SaltyNX。来源：github.com/masagrator/SaltyNX。");
                 extra(&extras::ReverseNX, extras::HasReverseNX, none, none,
-                      "Makes a game render its docked 1080p picture in handheld, for 1080p over USB (overlay menu, then "
-                      "ReverseNX-RT). Needs SaltyNX; not every game supports it. From github.com/masagrator/ReverseNX-RT.");
+                      "让游戏在掌机模式下渲染底座 1080p 画面，从而支持 USB 1080p 串流。在悬浮菜单中打开 ReverseNX-RT 设置。需要 SaltyNX，部分游戏不支持。来源：github.com/masagrator/ReverseNX-RT。");
                 extra(&extras::SysClk, extras::HasSysClk, none,
-                      [] { return extras::HasHorizonOC() ? std::string("Horizon OC is installed") : std::string(); },
-                      "Raises the clocks so 1080p streams at a full 60 fps (CPU 1785 MHz, set it in its overlay). Pick sys-clk or "
-                      "Horizon OC, not both. From github.com/retronx-team/sys-clk.");
+                      [] { return extras::HasHorizonOC() ? std::string("已安装 Horizon OC") : std::string(); },
+                      "通过超频使 1080p 串流达到 60 FPS（建议 CPU 1785 MHz，在其悬浮菜单中设置）。sys-clk 与 Horizon OC 二选一，不可同时安装。来源：github.com/retronx-team/sys-clk。");
                 extra(&extras::HorizonOC, extras::HasHorizonOC,
-                      [] { return extras::HekateMissesHocKip() ? std::string("Installed - Hekate needs its kip") : std::string(); },
-                      [] { return extras::HasSysClk() ? std::string("sys-clk is installed") : std::string(); },
-                      "An overclocking tool with more headroom than sys-clk (CPU, GPU and RAM). Its authors warn that RAM "
-                      "overclocking can corrupt the NAND or the SD card: back both up first. It replaces atmosphere/exosphere.bin; "
-                      "booting with Hekate, the boot entry needs kip1=atmosphere/kips/hoc.kip and secmon=atmosphere/exosphere.bin. "
-                      "An update replaces hoc.kip, which holds its settings: save them again in its overlay afterwards. "
-                      "Pick sys-clk or Horizon OC, not both. From github.com/Horizon-OC/Horizon-OC.");
+                      [] { return extras::HekateMissesHocKip() ? std::string("已安装，Hekate 需配置对应 kip") : std::string(); },
+                      [] { return extras::HasSysClk() ? std::string("已安装 sys-clk") : std::string(); },
+                      "提供比 sys-clk 更大调节范围的 CPU、GPU、RAM 超频工具。作者提示 RAM 超频可能损坏 NAND 或 SD 卡数据，请先备份。安装会替换 atmosphere/exosphere.bin；使用 Hekate 启动时，启动项需设置 kip1=atmosphere/kips/hoc.kip 和 secmon=atmosphere/exosphere.bin。更新会替换包含设置的 hoc.kip，之后需在其悬浮菜单中重新保存设置。sys-clk 与 Horizon OC 二选一。来源：github.com/Horizon-OC/Horizon-OC。");
                 pages.push_back(std::move(p));
             }
 
             /* ---- Setup ---- */
             {
-                Page p{ "Setup", {} };
-                p.rows.push_back(Section("What is on the SD card"));
+                Page p{ "安装检查", {} };
+                p.rows.push_back(Section("SD 卡安装状态"));
                 auto check = [&p](const char *label, const char *path, bool needed, const char *help) {
                     p.rows.push_back(Info(label, [path] { return Check(FileExists(path)); },
                         [path, needed] { return FileExists(path) ? ui::Good : (needed ? ui::Bad : ui::Dim); }, help));
                 };
-                check("Sysmodule", ModuleNsp, true, "atmosphere/contents/0100000000000C20/exefs.nsp - the part that streams.");
-                check("Memory helper", "sdmc:/atmosphere/contents/0100000000000C21/exefs.nsp", true,
-                      "atmosphere/contents/0100000000000C21/exefs.nsp - starts the sysmodule once the console has booted, and while a viewer "
-                      "is connected lends it the streaming memory, so that game manuals, news and the eShop work whenever you are not streaming.");
-                check("Overlay", "sdmc:/switch/.overlays/switch-frame-tap.ovl", false,
-                      "switch/.overlays/switch-frame-tap.ovl - stream on/off, the beta features and handheld/docked from inside a game "
-                      "(needs the Tesla overlay loader - Ultrahand in Extras).");
-                p.rows.push_back(Info("System memory", [this] { return free_mem.empty() ? std::string("Not measured this boot") : free_mem + " free before it started"; }, nullptr,
-                    "All sysmodules share a few MB of the console's system memory with the system itself. When too little is left, "
-                    "launching a game can end on a black screen, and Switch Frame Tap does not start at all (the console still boots). "
-                    "Turning off a sysmodule you do not use frees some." +
-                    (others.empty() ? std::string() : std::string(" Sysmodules running at boot, biggest first:\n") + others)));
-                p.rows.push_back(Info("Firmware", [this] { return FwText(); }, [this] { return FwTested() ? ui::Dim : ui::Warn; },
-                    "This version was tested on firmware 21.x to 23.x. On other firmware the sysmodule does not "
-                    "stream unless \"Allow untested firmware\" is on."));
-                p.rows.push_back(Info("Atmosphere", [this] { return AmsText(); }, nullptr, "The custom firmware this runs on."));
-                p.rows.push_back(Info("Install type", [this] { return std::string(test_install ? "Test (applet-mitm.armed)" : "Release"); },
+                check("后台模块", ModuleNsp, true, "atmosphere/contents/0100000000000C20/exefs.nsp · 负责串流的后台模块。");
+                check("内存辅助模块", "sdmc:/atmosphere/contents/0100000000000C21/exefs.nsp", true,
+                      "atmosphere/contents/0100000000000C21/exefs.nsp · 开机完成后启动后台模块，并在客户端连接时提供串流所需内存；未串流时释放内存，供游戏说明书、新闻和 eShop 等使用。");
+                check("悬浮菜单", "sdmc:/switch/.overlays/switch-frame-tap.ovl", false,
+                      "switch/.overlays/switch-frame-tap.ovl · 在游戏内开关串流、设置实验功能及掌机/底座模式。需要 Tesla 悬浮菜单加载器，可在“扩展工具”中安装 Ultrahand。");
+                p.rows.push_back(Info("系统内存", [this] { return free_mem.empty() ? std::string("本次开机尚未测量") : free_mem + "（启动前可用）"; }, nullptr,
+                    "所有后台模块与系统共享少量系统内存。剩余内存过低可能导致游戏启动黑屏；Switch Frame Tap 会在内存不足时放弃启动，主机仍可正常开机。关闭不使用的后台模块可释放内存。" +
+                    (others.empty() ? std::string() : std::string(" 开机运行的后台模块（按内存占用降序）：\n") + others)));
+                p.rows.push_back(Info("系统固件", [this] { return FwText(); }, [this] { return FwTested() ? ui::Dim : ui::Warn; },
+                    "此版本已在固件 21.x 至 23.x 上测试。其他固件默认不启用串流，需开启“允许未经测试的固件”。"));
+                p.rows.push_back(Info("Atmosphere", [this] { return AmsText(); }, nullptr, "本应用依赖的 Atmosphère 自定义固件。"));
+                p.rows.push_back(Info("安装类型", [this] { return std::string(test_install ? "测试版（applet-mitm.armed）" : "正式版"); },
                     [this] { return test_install ? ui::Warn : ui::Dim; },
-                    "A test install is driven by sdmc:/applet-mitm.armed and ignores config.ini. Delete that file for normal use."));
-                p.rows.push_back(Section("Advanced"));
-                p.rows.push_back(Choice("Start delay after boot", [this] { char b[32]; std::snprintf(b, sizeof(b), "%d s", DelaySeconds[set.delay]); return std::string(b); },
+                    "测试安装使用 sdmc:/applet-mitm.armed 控制，并忽略 config.ini。正常使用时请删除该测试文件。"));
+                p.rows.push_back(Section("高级设置"));
+                p.rows.push_back(Choice("开机启动延迟", [this] { char b[32]; std::snprintf(b, sizeof(b), "%d s", DelaySeconds[set.delay]); return std::string(b); },
                     [this](int d) { set.delay = (set.delay + (d > 0 ? 1 : 4)) % 5; Saved(); },
-                    "Seconds after boot before the sysmodule starts looking for a game. Applies from the next boot."));
-                p.rows.push_back(Toggle("Allow untested firmware", [this] { return set.any_fw; }, [this](int) { set.any_fw = !set.any_fw; Saved(); },
-                    "Stream on firmware this version was not tested on. It may work; it may also freeze the console, "
-                    "which needs a hard power-off. Applies from the next boot.", nullptr, nullptr));
+                    "开机后等待指定秒数，再开始寻找游戏。下次开机生效。"));
+                p.rows.push_back(Toggle("允许未经测试的固件", [this] { return set.any_fw; }, [this](int) { set.any_fw = !set.any_fw; Saved(); },
+                    "允许在未经此版本测试的固件上串流。可能正常运行，也可能导致主机死机并需要强制关机。下次开机生效。", nullptr, nullptr));
                 pages.push_back(std::move(p));
             }
 
             /* ---- Updates (v0.7.14) ---- */
             {
-                Page p{ "Updates", {} };
-                p.rows.push_back(Section("From this project's GitHub releases"));
-                p.rows.push_back(Action("Check for updates", [this] {
+                Page p{ "更新", {} };
+                p.rows.push_back(Section("来自本项目的 GitHub 发布页"));
+                p.rows.push_back(Action("检查更新", [this] {
                         switch (upd) {
-                            case Upd::Latest:    return std::string("Up to date");
-                            case Upd::Found:     return upd_rel.tag + " is available";
-                            case Upd::Installed: return upd_rel.tag + " installed";
+                            case Upd::Latest:    return std::string("已是最新版本");
+                            case Upd::Found:     return upd_rel.tag + " 可更新";
+                            case Upd::Installed: return upd_rel.tag + " 已安装";
                             case Upd::Failed:    return upd_msg;
-                            default:             return std::string("Not checked yet");
+                            default:             return std::string("尚未检查");
                         }
                     }, [](int) { g_pending_update = 1; },
-                    "Asks GitHub for the newest Switch Frame Tap - only full releases, unless \"Include betas\" below is on. "
-                    "The console must be online.",
+                    "从 GitHub 检查 Switch Frame Tap 最新版本。默认仅正式版，开启下方“接收测试版更新”后也会包含测试版。主机需连接网络。",
                     [this] { return upd == Upd::Found ? ui::Good : upd == Upd::Failed ? ui::Warn : upd == Upd::Installed ? ui::Acc : ui::Dim; }));
-                p.rows.push_back(Action("Install the update", [this] {
-                        if (upd == Upd::Installed) { return std::string("Restart the console to finish"); }
+                p.rows.push_back(Action("安装更新", [this] {
+                        if (upd == Upd::Installed) { return std::string("请重启主机完成更新"); }
                         if (upd != Upd::Found) { return std::string("-"); }
-                        return confirm_update ? "A again: install " + upd_rel.tag : upd_rel.tag;
+                        return confirm_update ? "再按 A 安装 " + upd_rel.tag : upd_rel.tag;
                     }, [this](int) {
-                        if (upd == Upd::Installed) { Toast("Restart the console: hold POWER, Power Options, Restart"); return; }
-                        if (upd != Upd::Found) { Toast("Check for updates first"); return; }
+                        if (upd == Upd::Installed) { Toast("重启主机：长按 POWER → 电源选项 → 重新启动"); return; }
+                        if (upd != Upd::Found) { Toast("请先检查更新"); return; }
                         if (!confirm_update) { confirm_update = true; return; }
                         confirm_update = false;
                         g_pending_update = 2;
                     },
-                    "Downloads the new version's Switch zip and puts it on the SD card, as a manual update would: the "
-                    "sysmodule, the memory helper, the overlay and this app. Your settings are kept. The console runs the new "
-                    "version after a restart.",
+                    "下载新版 Switch 安装包并解压至 SD 卡，效果与手动更新相同：更新后台模块、内存辅助模块、悬浮菜单和本应用，保留现有设置。重启主机后使用新版本。",
                     [this] { return confirm_update ? ui::Warn : upd == Upd::Found ? ui::Good : upd == Upd::Installed ? ui::Acc : ui::Dim; }));
-                p.rows.push_back(Toggle("Include betas", [this] { return set.update_betas; },
+                p.rows.push_back(Toggle("接收测试版更新", [this] { return set.update_betas; },
                     [this](int) {
                         set.update_betas = !set.update_betas;
-                        if (!SaveSettings(set)) { Toast("Could not write config.ini"); return; }
+                        if (!SaveSettings(set)) { Toast("无法写入 config.ini"); return; }
                         if (upd == Upd::Latest || upd == Upd::Found) { upd = Upd::Unknown; }
-                        Toast(set.update_betas ? "Betas are offered too - check again" : "Only full releases are offered");
+                        Toast(set.update_betas ? "已包含测试版，请重新检查" : "仅接收正式版更新");
                     },
-                    "Betas (pre-releases) try new things before a full release. They work for most people, but have had "
-                    "less testing - turn this off to stay on full releases."));
-                p.rows.push_back(Info("This version", [] { return std::string(AppVersion); }, nullptr,
-                    "The version of this app. The sysmodule and the overlay come in the same zip, so they match it."));
+                    "测试版会提前提供新功能，但测试覆盖较少。关闭此项可仅接收正式版更新。"));
+                p.rows.push_back(Info("当前版本", [] { return std::string(AppVersion); }, nullptr,
+                    "本应用的版本。后台模块与悬浮菜单来自同一安装包，版本应保持一致。"));
                 pages.push_back(std::move(p));
             }
 
             /* ---- About ---- */
             {
-                Page p{ "About", {} };
-                p.rows.push_back(Info("Version", [] { return std::string(AppVersion); }, nullptr,
-                    "Switch Frame Tap - native 1080p60 game streaming to a PC, over USB or the network."));
-                p.rows.push_back(Info("Source code", [] { return std::string("github.com/TomasUribe/switch-frame-tap"); }, nullptr,
-                    "Free and open source (GPL-2.0). Bug reports and ideas: the GitHub issues, or the GBAtemp thread."));
-                p.rows.push_back(Info("If something goes wrong", [] { return std::string("Hold Volume Up at boot"); }, nullptr,
-                    "Holding Volume Up while Atmosphere boots skips all sysmodules. Or turn off \"Start with the console\" on the "
-                    "Home page, or delete atmosphere/contents/0100000000000C20 and 0100000000000C21 on a PC."));
-                p.rows.push_back(Info("Thanks", [] { return std::string("Bundled and optional tools"); }, nullptr,
-                    "dvr-patches by exelix11 (sound in no-record games), SaltyNX and ReverseNX-RT by masagrator, Ultrahand by "
-                    "ppkantorski, sys-clk by the RetroNX team, Horizon OC by its team, and Atmosphere by SciresM and contributors."));
+                Page p{ "关于", {} };
+                p.rows.push_back(Info("版本", [] { return std::string(AppVersion); }, nullptr,
+                    "Switch Frame Tap · 通过 USB 或网络向电脑串流原生 1080p60 游戏画面。"));
+                p.rows.push_back(Info("源代码", [] { return std::string("github.com/TomasUribe/switch-frame-tap"); }, nullptr,
+                    "免费开源（GPL-2.0）。问题反馈与建议请提交至 GitHub Issues 或 GBAtemp 讨论帖。"));
+                p.rows.push_back(Info("故障恢复", [] { return std::string("开机时按住音量加键"); }, nullptr,
+                    "Atmosphère 启动时按住音量加键可跳过所有后台模块。也可在“主页”关闭“开机启动”，或通过电脑删除 atmosphere/contents/0100000000000C20 和 0100000000000C21。"));
+                p.rows.push_back(Info("致谢", [] { return std::string("内置与可选工具"); }, nullptr,
+                    "感谢 exelix11 的 dvr-patches（采集禁用录制游戏的声音），masagrator 的 SaltyNX 和 ReverseNX-RT，ppkantorski 的 Ultrahand，RetroNX 团队的 sys-clk，Horizon OC 团队，以及 SciresM 和贡献者开发的 Atmosphère。"));
                 pages.push_back(std::move(p));
             }
 
@@ -1085,17 +1019,17 @@ namespace {
         int cx = x + 28;
         const int cy = y + h - 46;
         cx += ui::Chip(a.ConnShort(), cx, cy, ui::Acc) + 8;
-        if (a.RunningHomeMenu()) { cx += ui::Chip("HOME menu", cx, cy, ui::Good) + 8; }
-        if (a.RunningOverlays()) { cx += ui::Chip("Overlays", cx, cy, ui::Good) + 8; }
-        if (!a.StreamOn() && a.installed) { cx += ui::Chip("Stream off", cx, cy, ui::Faint) + 8; }
-        if (a.upd == App::Upd::Found) { ui::Chip("Update " + a.upd_rel.tag + " available", cx, cy, ui::Warn); }
+        if (a.RunningHomeMenu()) { cx += ui::Chip("HOME 菜单", cx, cy, ui::Good) + 8; }
+        if (a.RunningOverlays()) { cx += ui::Chip("悬浮界面", cx, cy, ui::Good) + 8; }
+        if (!a.StreamOn() && a.installed) { cx += ui::Chip("串流已关闭", cx, cy, ui::Faint) + 8; }
+        if (a.upd == App::Upd::Found) { ui::Chip("更新 " + a.upd_rel.tag + " 可用", cx, cy, ui::Warn); }
         if (streaming) {
             char b[32];
             std::snprintf(b, sizeof(b), "%u.%u", a.st.fps_x10 / 10, a.st.fps_x10 % 10);
             ui::Text(b, x + w - 30, y + 26, ui::Big, ui::Ink, 2);
-            ui::Text("fps", x + w - 30, y + 76, ui::Small, ui::Dim, 2);
+            ui::Text("FPS", x + w - 30, y + 76, ui::Small, ui::Dim, 2);
             if (a.st.game_fps_x10 != 0) {
-                std::snprintf(b, sizeof(b), "game %u.%u", a.st.game_fps_x10 / 10, a.st.game_fps_x10 % 10);
+                std::snprintf(b, sizeof(b), "游戏 %u.%u", a.st.game_fps_x10 / 10, a.st.game_fps_x10 % 10);
                 ui::Text(b, x + w - 30, y + 100, ui::Small, ui::Faint, 2);
             }
         }
@@ -1193,9 +1127,10 @@ namespace {
         if (a.toast_frames == 0) { return; }
         --a.toast_frames;
         const Uint8 al = a.toast_frames < 20 ? static_cast<Uint8>(a.toast_frames * 255 / 20) : 255;
-        const int tw = ui::TextW(a.toast, ui::Body) + 44;
-        ui::RRect(cx - tw / 2, 592, tw, 46, 23, ui::Alpha(ui::Surf3, al));
-        ui::Text(a.toast, cx, 603, ui::Body, ui::Alpha(ui::Ink, al), 1);
+        const int tw = std::min(CW, ui::TextW(a.toast, ui::Body) + 44); /* Keep translated notices inside the content column. */
+        const int th = ui::TextH(a.toast, ui::Body, tw - 44) + 24; /* Wrapped notice height, including vertical padding. */
+        ui::RRect(cx - tw / 2, 640 - th, tw, th, 18, ui::Alpha(ui::Surf3, al));
+        ui::Text(a.toast, cx, 652 - th, ui::Body, ui::Alpha(ui::Ink, al), 1, tw - 44);
     }
 
     void Draw(App &a) {
@@ -1255,11 +1190,11 @@ namespace {
 
         const Row *cur = a.CurRow();
         if (a.in_content) {
-            const char *act = cur == nullptr || !cur->change ? nullptr : cur->kind == Kind::Action ? "Open" : "Change";
-            if (act != nullptr) { DrawHints({ { "", '+', "Exit" }, { "", 'B', "Back" }, { "", 'A', act } }, SideW); }
-            else { DrawHints({ { "", '+', "Exit" }, { "", 'B', "Back" } }, SideW); }
+            const char *act = cur == nullptr || !cur->change ? nullptr : cur->kind == Kind::Action ? "打开" : "更改";
+            if (act != nullptr) { DrawHints({ { "", '+', "退出" }, { "", 'B', "返回" }, { "", 'A', act } }, SideW); }
+            else { DrawHints({ { "", '+', "退出" }, { "", 'B', "返回" } }, SideW); }
         } else {
-            DrawHints({ { "", '+', "Exit" }, { "", 'A', "Open" } }, SideW);
+            DrawHints({ { "", '+', "退出" }, { "", 'A', "打开" } }, SideW);
         }
         DrawToast(a, CX + CW / 2);
         SDL_RenderPresent(ui::g_ren);
@@ -1302,9 +1237,9 @@ namespace {
         }
         void Delete() {
             if (files.empty()) { return; }
-            if (confirm != sel) { confirm = sel; note = "Press Y again to delete this screenshot"; return; }
+            if (confirm != sel) { confirm = sel; note = "再按一次 Y 删除这张截图"; return; }
             const std::string &path = files[sel];
-            note = std::remove(path.c_str()) == 0 ? "Deleted" : "Could not delete it";
+            note = std::remove(path.c_str()) == 0 ? "已删除" : "删除失败";
             files.erase(files.begin() + sel);
             if (sel >= static_cast<int>(files.size()) && sel > 0) { --sel; }
             confirm = -1;
@@ -1345,21 +1280,21 @@ namespace {
             DrawImageFit(g.tex, g.tw, g.th, 0, 0, ui::W, ui::H);
             ui::Fill(0, BarY, ui::W, ui::H - BarY, ui::Alpha(ui::Bg, 200));
             char b[96];
-            std::snprintf(b, sizeof(b), "%s   (%d of %zu)", ShotLabel(g.files[g.sel]).c_str(), g.sel + 1, g.files.size());
+            std::snprintf(b, sizeof(b), "%s   （%d / %zu）", ShotLabel(g.files[g.sel]).c_str(), g.sel + 1, g.files.size());
             ui::Text(b, 32, BarY + 17, ui::Body, ui::Ink);
-            DrawHints({ { "", 'B', "Back" }, { "", 'Y', "Delete" }, { "", 'R', "Next" }, { "", 'L', "Previous" } }, 0);
+            DrawHints({ { "", 'B', "返回" }, { "", 'Y', "删除" }, { "", 'R', "下一张" }, { "", 'L', "上一张" } }, 0);
             if (!g.note.empty()) { ui::Text(g.note, ui::W / 2, 600, ui::Body, ui::Warn, 1); }
             SDL_RenderPresent(ui::g_ren);
             return;
         }
         char cnt[48];
-        std::snprintf(cnt, sizeof(cnt), g.files.size() == 1 ? "%zu screenshot" : "%zu screenshots", g.files.size());
-        ScreenTop("Screenshots", cnt);
+        std::snprintf(cnt, sizeof(cnt), g.files.size() == 1 ? "%zu 张截图" : "%zu 张截图", g.files.size());
+        ScreenTop("截图", cnt);
         if (g.files.empty()) {
             ui::RRect(240, 200, 800, 220, 24, ui::Surf);
-            ui::Text("No screenshots yet", ui::W / 2, 250, ui::Title, ui::Ink, 1);
-            ui::Text("Turn on the screenshot button, then press the combo in a game.", ui::W / 2, 310, ui::Body, ui::Dim, 1);
-            DrawHints({ { "", 'B', "Back" } }, 0);
+            ui::Text("暂无截图", ui::W / 2, 250, ui::Title, ui::Ink, 1);
+            ui::Text("启用截图快捷键后，在游戏中按下对应组合即可截图。", ui::W / 2, 310, ui::Body, ui::Dim, 1);
+            DrawHints({ { "", 'B', "返回" } }, 0);
             if (!g.note.empty()) { ui::Text(g.note, 32, BarY + 17, ui::Body, ui::Warn); }
             SDL_RenderPresent(ui::g_ren);
             return;
@@ -1387,11 +1322,11 @@ namespace {
             ui::Text(info, PrevX + 24, GalTop + 432, ui::Label, ui::Ink);
             ui::Text(g.files[g.sel].substr(g.files[g.sel].rfind("sdmc:", 0) == 0 ? 5 : 0), PrevX + 24, GalTop + 468, ui::Small, ui::Faint, 0, PrevW - 48);
         } else if (g.tex_idx == g.sel) {
-            ui::Text("This file could not be opened.", PrevX + PrevW / 2, GalTop + 220, ui::Body, ui::Warn, 1);
+            ui::Text("无法打开此文件。", PrevX + PrevW / 2, GalTop + 220, ui::Body, ui::Warn, 1);
         } else {
-            ui::Text("Loading...", PrevX + PrevW / 2, GalTop + 220, ui::Body, ui::Dim, 1);
+            ui::Text("加载中…", PrevX + PrevW / 2, GalTop + 220, ui::Body, ui::Dim, 1);
         }
-        DrawHints({ { "", 'B', "Back" }, { "", 'Y', "Delete" }, { "", 'A', "View" } }, 0);
+        DrawHints({ { "", 'B', "返回" }, { "", 'Y', "删除" }, { "", 'A', "查看" } }, 0);
         if (!g.note.empty()) { ui::Text(g.note, 32, BarY + 17, ui::Body, ui::Warn); }
         SDL_RenderPresent(ui::g_ren);
     }
@@ -1454,10 +1389,10 @@ namespace {
      * held for two seconds is recorded; touch cancels, 20 s gives up */
     void RecordCombo(App &app, PadState &pad) {
         auto draw = [](const char *line1, const std::string &names, double frac) {
-            DrawProgressCard("Screenshot combo", line1, names.empty() ? std::string("-") : names, frac,
-                             "The Capture button is a separate setting (pressing it here would take a picture of this app).");
+            DrawProgressCard("截图按键组合", line1, names.empty() ? std::string("-") : names, frac,
+                             "截图键需单独设置（此处按下会截取当前应用画面）。");
             ui::Fill(0, BarY, ui::W, 1, ui::Line);
-            ui::Text("Touch the screen to cancel", ui::W - 32, BarY + 17, ui::Body, ui::Dim, 2);
+            ui::Text("触摸屏幕取消", ui::W - 32, BarY + 17, ui::Body, ui::Dim, 2);
             SDL_RenderPresent(ui::g_ren);
         };
         auto names_of = [](uint32_t m) {
@@ -1473,11 +1408,11 @@ namespace {
             padUpdate(&pad);
             HidTouchScreenState ts = {};
             const bool touched = hidGetTouchScreenStates(&ts, 1) && ts.count > 0;
-            if (!touched) { touch_free = true; } else if (touch_free) { app.Toast("Not changed"); return; }
+            if (!touched) { touch_free = true; } else if (touch_free) { app.Toast("未更改"); return; }
             const uint32_t held = static_cast<uint32_t>(padGetButtons(&pad)) & sft::shotbuttons::AllButtons;
             if (!released) {                      /* the A that opened this first */
                 if (held == 0) { released = true; }
-                draw("Let go of all buttons...", "", 0.0);
+                draw("请松开所有按键…", "", 0.0);
                 continue;
             }
             if (held != last) { last = held; steady = 0; } else if (held != 0) { ++steady; }
@@ -1485,12 +1420,12 @@ namespace {
                 app.set.shot_mask = held;
                 app.set.shot_combo = ComboCustom;
                 app.Saved();
-                app.Toast("Screenshot combo: " + app.CustomComboText());
+                app.Toast("截图按键组合：" + app.CustomComboText());
                 return;
             }
-            draw(held ? "Keep holding them..." : "Hold the buttons you want, together", names_of(held), held ? steady / 120.0 : 0.0);
+            draw(held ? "请继续按住…" : "请同时按住所需按键", names_of(held), held ? steady / 120.0 : 0.0);
         }
-        app.Toast("Not changed");
+        app.Toast("未更改");
     }
 
     /* v0.7.5: a Get extras download, with its progress on screen; B cancels */
@@ -1498,8 +1433,8 @@ namespace {
         const extras::Tool &t = *g_pending_install;
         g_pending_install = nullptr;
         auto draw = [&t](const char *what, double frac) {
-            DrawProgressCard("Get extras", t.name, what, frac, "From the official GitHub release");
-            DrawHints({ { "", 'B', "Cancel" } }, 0);
+            DrawProgressCard("安装扩展工具", t.name, what, frac, "来自官方 GitHub 发布页");
+            DrawHints({ { "", 'B', "取消" } }, 0);
             SDL_RenderPresent(ui::g_ren);
         };
         u32 tick = 0;
@@ -1510,7 +1445,7 @@ namespace {
             if ((++tick % 4) == 0 || frac < 0.0) { draw(what, frac); }
             return true;
         };
-        draw("Connecting...", -1.0);
+        draw("连接中…", -1.0);
         std::string done, err;
         if (extras::Install(t, progress, &done, &err)) { app.Toast(done); }
         else { app.Toast(std::string(t.name) + ": " + err); }
@@ -1520,10 +1455,10 @@ namespace {
     /* v0.7.14: Check for updates / Install the update, with its progress on
      * screen; B cancels */
     void RunUpdate(App &app, PadState &pad, int mode) {
-        const char *title = mode == 1 ? "Check for updates" : "Update";
+        const char *title = mode == 1 ? "检查更新" : "更新";
         auto draw = [title](const char *what, double frac) {
-            DrawProgressCard(title, "Switch Frame Tap", what, frac, "From this project's GitHub releases");
-            DrawHints({ { "\uE0A1", 'B', "Cancel" } }, 0);
+            DrawProgressCard(title, "Switch Frame Tap", what, frac, "来自本项目的 GitHub 发布页");
+            DrawHints({ { "\uE0A1", 'B', "取消" } }, 0);
             SDL_RenderPresent(ui::g_ren);
         };
         u32 tick = 0;
@@ -1534,19 +1469,19 @@ namespace {
             if ((++tick % 4) == 0 || frac < 0.0) { draw(what, frac); }
             return true;
         };
-        draw("Connecting...", -1.0);
+        draw("连接中…", -1.0);
         std::string err, done;
         if (mode == 1) {
             const int r = extras::CheckUpdate(AppVersion, app.set.update_betas, &app.upd_rel, progress, &err);
-            if (r < 0) { app.upd = App::Upd::Failed; app.upd_msg = err; app.Toast("Could not check: " + err); }
-            else if (r == 0) { app.upd = App::Upd::Latest; app.Toast(std::string("Switch Frame Tap ") + AppVersion + " is the newest"); }
-            else { app.upd = App::Upd::Found; app.Toast(app.upd_rel.tag + " is available - Install the update below"); }
+            if (r < 0) { app.upd = App::Upd::Failed; app.upd_msg = err; app.Toast("检查失败：" + err); }
+            else if (r == 0) { app.upd = App::Upd::Latest; app.Toast(std::string("Switch Frame Tap ") + AppVersion + " 已是最新版本"); }
+            else { app.upd = App::Upd::Found; app.Toast(app.upd_rel.tag + " 可更新，请选择下方“安装更新”"); }
         } else if (extras::InstallUpdate(app.upd_rel, progress, &done, &err)) {
             app.upd = App::Upd::Installed;
             app.Toast(done);
         } else {
             app.upd_msg = err;
-            app.Toast("The update did not finish: " + err);
+            app.Toast("更新未完成：" + err);
         }
         app.Refresh();
     }
@@ -1601,8 +1536,12 @@ int main(int, char **) {
     ui::g_ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_SetRenderDrawBlendMode(ui::g_ren, SDL_BLENDMODE_BLEND);
 
-    PlFontData std_font = {}, ext_font = {};
-    plGetSharedFontByType(&std_font, PlSharedFontType_Standard);
+    PlFontData std_font = {}, ext_font = {}; /* System text font and Nintendo button symbols, valid until plExit. */
+    /* Simplified Chinese includes the Latin characters used by the UI. Fall
+     * back to Standard if the console cannot supply the Chinese shared font. */
+    if (R_FAILED(plGetSharedFontByType(&std_font, PlSharedFontType_ChineseSimplified))) {
+        plGetSharedFontByType(&std_font, PlSharedFontType_Standard);
+    }
     plGetSharedFontByType(&ext_font, PlSharedFontType_NintendoExt);
     ui::LoadFonts(std_font.address, std_font.size, ext_font.address, ext_font.size);
 

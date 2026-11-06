@@ -11,7 +11,7 @@
 static void pui_capture(int arg)
 {
     const int dev = arg / 1000;
-    if (dev == 2 && !g_pad) { hud_toast("Connect a controller first"); return; }
+    if (dev == 2 && !g_pad) { hud_toast("请先连接手柄"); return; }
     g_pcap_dev = dev;
     g_pcap_slot = (arg % 1000) / 2;
     g_pcap_cell = dev == 1 ? (arg & 1) : 0;
@@ -36,12 +36,12 @@ static void pui_swap(void)
 {
     pcfg_swap_face();
     prefs_save();
-    hud_toast("A and B, X and Y swapped");
+    hud_toast("已交换 A / B 和 X / Y");
 }
 
 static const char *ui_pad_summary(char *b, size_t n)
 {
-    snprintf(b, n, "Controller %s, keyboard %s, mouse %s", g_pad_send ? "on" : "off", g_pad_kbd ? "on" : "off", g_pad_mouse ? "on" : "off");
+    snprintf(b, n, "手柄 %s，键盘 %s，鼠标 %s", g_pad_send ? "开启" : "关闭", g_pad_kbd ? "开启" : "关闭", g_pad_mouse ? "开启" : "关闭");
     return b;
 }
 
@@ -54,7 +54,7 @@ static void pui_cell(SDL_Renderer *ren, float x, float y, float w, float h, cons
     SDL_Color f = cap ? UI_ACC : UI_SURF3;
     if (hov && !cap) { f.r = (Uint8)(f.r + (255 - f.r) / 8); f.g = (Uint8)(f.g + (255 - f.g) / 8); f.b = (Uint8)(f.b + (255 - f.b) / 8); }
     ui_rrect(ren, x, y, w, h, ui_d(8), f);
-    ui_text_fit(ren, cap ? (g_pcap_dev == 1 ? "Press a key" : "Press a button") : txt, (int)(x + w / 2), (int)(y + (h - px * 1.18f) / 2), px, 1,
+    ui_text_fit(ren, cap ? (g_pcap_dev == 1 ? "按下键盘按键" : "按下手柄按键") : txt, (int)(x + w / 2), (int)(y + (h - px * 1.18f) / 2), px, 1,
                 cap ? (SDL_Color){ 8, 20, 30, 255 } : unset ? UI_FAINT : UI_INK, 1, (int)(w - ui_d(8)));
     ui_hit(x, y, w, h, H_PADBIND, arg);
 }
@@ -92,7 +92,7 @@ static void pui_mouse_binds(SDL_Renderer *ren, float cx, float xr, float *y)
     if (vw + 2 * aw > (xr - cx) * 0.6f) vw = floorf((xr - cx) * 0.6f - 2 * aw);
     vw = floorf(vw); aw = floorf(aw);
     const float x = floorf(xr - vw - 2 * aw);
-    ui_section(ren, cx, y, "BUTTONS");
+    ui_section(ren, cx, y, "按键");
     for (int m = 0; m < PMB_N; m++) {
         const int px = ui_px(16);
         ui_row(H_PADMBTN, m * 2 + 1, *y, h);
@@ -106,7 +106,7 @@ static void pui_mouse_binds(SDL_Renderer *ren, float cx, float xr, float *y)
         const int tpx = ui_px(14), ty = (int)(*y + (h - tpx * 1.18f) / 2);
         text_draw(ren, "<", (int)(x + aw / 2), ty, tpx, 1, UI_DIM, 1);
         text_draw(ren, ">", (int)(x + aw + vw + aw / 2), ty, tpx, 1, UI_DIM, 1);
-        ui_text_fit(ren, v >= 0 ? ps_name[v] : "Nothing", (int)(x + aw + vw / 2), ty, tpx, 1, v >= 0 ? UI_INK : UI_FAINT, 1, (int)(vw - ui_d(8)));
+        ui_text_fit(ren, v >= 0 ? ps_name[v] : "无", (int)(x + aw + vw / 2), ty, tpx, 1, v >= 0 ? UI_INK : UI_FAINT, 1, (int)(vw - ui_d(8)));
         ui_hit(x, *y, aw, h, H_PADMBTN, m * 2);
         ui_hit(x + aw, *y, vw, h, H_PADMBTN, m * 2 + 1);
         ui_hit(x + aw + vw, *y, aw, h, H_PADMBTN, m * 2 + 1);
@@ -153,25 +153,25 @@ static void ui_pad_page(SDL_Renderer *ren, float cx_l, float xr_l, float cx_r, f
     float yl = *py_l, yr = *py_r;
     char sub[220];
 
-    ui_section(ren, cx_l, &yl, "PLAYS THE SWITCH");
+    ui_section(ren, cx_l, &yl, "操作 SWITCH");
     ui_row(H_PAD, 0, yl, h);
-    ui_label(ren, cx_l, yl, h, "Controller", pad_status(sub, sizeof(sub)), ui_focused(H_PAD, 0), col_w);
+    ui_label(ren, cx_l, yl, h, "控制器", pad_status(sub, sizeof(sub)), ui_focused(H_PAD, 0), col_w);
     ui_toggle(ren, xr_l, yl + ui_d(12), g_pad_send, H_PAD, 1);
     yl += h + ui_d(2);
     if (pad_count() > 1) {
         char s2[96];
-        snprintf(s2, sizeof(s2), "%d connected", pad_count());
+        snprintf(s2, sizeof(s2), "已连接 %d 个", pad_count());
         ui_row(H_PADCHANGE, 0, yl, h);
-        ui_label(ren, cx_l, yl, h, "Use another controller", s2, ui_focused(H_PADCHANGE, 0), col_w);
-        ui_button(ren, xr_l, 0, yl + ui_d(8), "Change", UI_SURF3, UI_INK, H_PADCHANGE, 0, 1);
+        ui_label(ren, cx_l, yl, h, "切换手柄", s2, ui_focused(H_PADCHANGE, 0), col_w);
+        ui_button(ren, xr_l, 0, yl + ui_d(8), "更改", UI_SURF3, UI_INK, H_PADCHANGE, 0, 1);
         yl += h + ui_d(2);
     }
     ui_row(H_PADKB, 0, yl, h);
-    ui_label(ren, cx_l, yl, h, "Keyboard", pad_kbd_status(sub, sizeof(sub)), ui_focused(H_PADKB, 0), col_w);
+    ui_label(ren, cx_l, yl, h, "键盘", pad_kbd_status(sub, sizeof(sub)), ui_focused(H_PADKB, 0), col_w);
     ui_toggle(ren, xr_l, yl + ui_d(12), g_pad_kbd, H_PADKB, 1);
     yl += h + ui_d(2);
     ui_row(H_PADMOUSE, 0, yl, h);
-    ui_label(ren, cx_l, yl, h, "Mouse", pad_mouse_status(sub, sizeof(sub)), ui_focused(H_PADMOUSE, 0), col_w);
+    ui_label(ren, cx_l, yl, h, "鼠标", pad_mouse_status(sub, sizeof(sub)), ui_focused(H_PADMOUSE, 0), col_w);
     ui_toggle(ren, xr_l, yl + ui_d(12), g_pad_mouse, H_PADMOUSE, 1);
     yl += h + ui_d(2);
 
@@ -181,12 +181,12 @@ static void ui_pad_page(SDL_Renderer *ren, float cx_l, float xr_l, float cx_r, f
         const float cxp = two ? cx_r : cx_l, wp = col_w;
         const float bh = two ? ui_d(150) : ui_d(92);
         char pr[240];
-        ui_section(ren, cxp, py, "PRESSING NOW");
+        ui_section(ren, cxp, py, "当前输入");
         ui_rrect(ren, cxp, *py - ui_d(4), wp, bh, ui_d(12), UI_SURF2);
         pad_pressed_text(pr, sizeof(pr));
         if (pr[0]) ui_wrap_a(ren, pr, (int)(cxp + ui_d(14)), (int)(*py + ui_d(8)), ui_px(16), 1, UI_ACC, (int)(wp - ui_d(28)), (int)ui_d(24), 0);
-        else text_draw(ren, "Nothing pressed", (int)(cxp + ui_d(14)), (int)(*py + ui_d(8)), ui_px(16), 0, UI_FAINT, 0);
-        ui_text_fit(ren, !g_pad && !g_pad_kbd ? "Connect a controller, or turn the keyboard on, to test it here" : "Press anything to test it here",
+        else text_draw(ren, "未检测到按键", (int)(cxp + ui_d(14)), (int)(*py + ui_d(8)), ui_px(16), 0, UI_FAINT, 0);
+        ui_text_fit(ren, !g_pad && !g_pad_kbd ? "连接手柄或开启键盘控制后，可在此测试" : "按下任意按键进行测试",
                     (int)(cxp + ui_d(14)), (int)(*py - ui_d(4) + bh - ui_d(28)), ui_px(13), 0, UI_DIM, 0, (int)(wp - ui_d(28)));
         *py += bh + ui_d(4);
     }
@@ -197,44 +197,44 @@ static void ui_pad_page(SDL_Renderer *ren, float cx_l, float xr_l, float cx_r, f
 
     /* the tabs */
     {
-        static const char *const tabs[] = { "Keyboard", "Mouse", "Controller" };
+        static const char *const tabs[] = { "键盘", "鼠标", "控制器" };
         ui_row(H_PADTAB, 0, y, ui_d(36));
         if (ui_focused(H_PADTAB, 0)) ui_rrect(ren, cx_l - ui_d(12), y - 3, all_w + ui_d(24), ui_d(38), ui_d(10), UI_SURF2);
         ui_seg(ren, -1, mid, y, tabs, 3, g_pad_tab, H_PADTAB, 15, all_w);
         y += ui_d(32) + ui_d(14);
     }
     const char *const note[3] = {
-        "Click a key, then press the key you want. Each button takes two keys. Esc cancels, Delete clears. Esc, F3, F10 and F11 stay the viewer's.",
-        "Off by default. Click the picture to hand the mouse to the Switch; F10 lets go. Moving it leans a stick, its buttons press Switch buttons.",
-        "Click a button, then press the one you want on your controller. The sticks stay as they are: left to left, right to right." };
+        "点击绑定项，再按下要使用的键。每个按键可绑定两个键。Esc 取消，Delete 清除。Esc、F3、F10 和 F11 保留为客户端快捷键。",
+        "默认关闭。点击画面后鼠标开始控制 Switch，F10 释放。移动鼠标模拟摇杆，鼠标按键映射为 Switch 按键。",
+        "点击绑定项，再按下手柄上要使用的按键。摇杆保持原有对应关系：左对左，右对右。" };
     pui_note(ren, cx_l, all_w, &y, note[g_pad_tab]);
 
     float ya = y, yb = y;
     float *pa = &ya, *pb = two ? &yb : &ya;
     const float cxb = two ? cx_r : cx_l, xrb = two ? xr_r : xr_l;
     if (g_pad_tab == 0) {
-        pui_binds(ren, cx_l, xr_l, pa, "BUTTONS", pui_g_btn, 14, 1);
-        pui_binds(ren, cxb, xrb, pb, "D-PAD", pui_g_dpad, 4, 1);
-        pui_binds(ren, cxb, xrb, pb, "LEFT STICK", pui_g_ls, 4, 1);
-        pui_binds(ren, cxb, xrb, pb, "RIGHT STICK", pui_g_rs, 4, 1);
+        pui_binds(ren, cx_l, xr_l, pa, "按键", pui_g_btn, 14, 1);
+        pui_binds(ren, cxb, xrb, pb, "方向键", pui_g_dpad, 4, 1);
+        pui_binds(ren, cxb, xrb, pb, "左摇杆", pui_g_ls, 4, 1);
+        pui_binds(ren, cxb, xrb, pb, "右摇杆", pui_g_rs, 4, 1);
     } else if (g_pad_tab == 1) {
-        static const char *const sticks[] = { "Right stick", "Left stick" };
+        static const char *const sticks[] = { "右摇杆", "左摇杆" };
         const float bh = ui_d(44), gy = ui_d(6);
         pui_mouse_binds(ren, cx_l, xr_l, pa);
-        ui_section(ren, cxb, pb, "MOVEMENT");
+        ui_section(ren, cxb, pb, "移动");
         ui_row(H_PADMODE, 0, *pb, bh);
-        ui_label(ren, cxb, *pb, bh, "Moves the", NULL, ui_focused(H_PADMODE, 0), col_w * 0.38f);
+        ui_label(ren, cxb, *pb, bh, "映射至", NULL, ui_focused(H_PADMODE, 0), col_w * 0.38f);
         ui_seg(ren, xrb, 0, *pb + gy, sticks, 2, g_pad_mstick, H_PADMODE, 14, col_w * 0.62f);
         *pb += bh + gy;
         pui_slider(ren, cxb, xrb, pb, 2);
         ui_row(H_PADINV, 0, *pb, ui_d(48));
-        ui_label(ren, cxb, *pb, ui_d(48), "Invert up and down", NULL, ui_focused(H_PADINV, 0), col_w);
+        ui_label(ren, cxb, *pb, ui_d(48), "反转上下方向", NULL, ui_focused(H_PADINV, 0), col_w);
         ui_toggle(ren, xrb, *pb + ui_d(12), g_pad_minvert, H_PADINV, 1);
         *pb += ui_d(52);
     } else {
-        pui_binds(ren, cx_l, xr_l, pa, "BUTTONS", pui_g_btn, 14, 2);
-        pui_binds(ren, cxb, xrb, pb, "D-PAD", pui_g_dpad, 4, 2);
-        ui_section(ren, cxb, pb, "STICKS AND TRIGGERS");
+        pui_binds(ren, cx_l, xr_l, pa, "按键", pui_g_btn, 14, 2);
+        pui_binds(ren, cxb, xrb, pb, "方向键", pui_g_dpad, 4, 2);
+        ui_section(ren, cxb, pb, "摇杆与扳机");
         pui_slider(ren, cxb, xrb, pb, 0);
         pui_slider(ren, cxb, xrb, pb, 1);
         {
@@ -243,17 +243,17 @@ static void ui_pad_page(SDL_Renderer *ren, float cx_l, float xr_l, float cx_r, f
             const int def = g_bind_ctl[PS_A] == SDL_CONTROLLER_BUTTON_B && g_bind_ctl[PS_B] == SDL_CONTROLLER_BUTTON_A &&
                             g_bind_ctl[PS_X] == SDL_CONTROLLER_BUTTON_Y && g_bind_ctl[PS_Y] == SDL_CONTROLLER_BUTTON_X;
             ui_row(H_PADSWAP, 0, *pb, h);
-            ui_label(ren, cxb, *pb, h, "Swap A / B and X / Y",
-                     sw ? "Now the labels match: Xbox A is A" : def ? "Now by place: the bottom button is B" : "Now: your own layout",
+            ui_label(ren, cxb, *pb, h, "交换 A / B 和 X / Y",
+                     sw ? "按名称对应：Xbox A 对应 A" : def ? "按位置对应：下方按键对应 B" : "当前：自定义布局",
                      ui_focused(H_PADSWAP, 0), col_w);
-            ui_button(ren, xrb, 0, *pb + ui_d(8), "Swap", UI_SURF3, UI_INK, H_PADSWAP, 0, 1);
+            ui_button(ren, xrb, 0, *pb + ui_d(8), "交换", UI_SURF3, UI_INK, H_PADSWAP, 0, 1);
             *pb += h + ui_d(2);
         }
     }
 
     y = (ya > yb ? ya : yb) + ui_d(12);
     {
-        const char *lab = "Back to defaults";
+        const char *lab = "恢复默认设置";
         const float bw = text_width(lab, ui_px(15), 1) + ui_d(32);
         ui_row(H_PADRESET, g_pad_tab, y, ui_d(32));
         if (ui_focused(H_PADRESET, g_pad_tab)) ui_rrect(ren, mid - bw / 2 - ui_d(8), y - 4, bw + ui_d(16), ui_d(40), ui_d(20), UI_SURF2);

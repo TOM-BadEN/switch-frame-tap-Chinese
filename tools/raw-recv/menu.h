@@ -1,73 +1,86 @@
-/* menu.h - v0.5: the viewer's text and drawing basics, and the home screen's
- * state (v0.7.12: the screen itself is drawn in ui.h). Drawn with SDL2 alone:
- * text comes from font_dejavu.h, a DejaVu Sans atlas built into the program
- * (tools/raw-recv/gen_font.py). */
-#include "font_dejavu.h"
+/* Text rendered from HarmonyOS Sans SC; generated atlas needs SDL2 only. */
+#include "font_harmony.h"
+#include "../../common/utf8.h"
 
 enum { MENU_WAITING = 0, MENU_NODRIVER, MENU_WRONG_DEVICE, MENU_CONNECTED, MENU_PAUSED };
 
-static int g_menu = 0;                 /* the menu is on screen (not a frame) */
-static int g_menu_state = MENU_WAITING;
-static char g_menu_err[64] = "";       /* the libusb error for MENU_NODRIVER */
-static char g_menu_other[64] = "";     /* the other USB program (SysDVR) for MENU_WRONG_DEVICE */
-static SDL_Texture *g_font_tex = NULL;
-static SDL_Renderer *g_font_ren = NULL;
+static int g_menu = 0;                 /* The menu is on screen instead of a frame. */
+static int g_menu_state = MENU_WAITING; /* Current connection state. */
+static char g_menu_err[64] = "";        /* libusb error for missing/inaccessible driver. */
+static char g_menu_other[64] = "";      /* Conflicting USB program name. */
+static SDL_Texture *g_font_tex = NULL; /* Shared regular/bold glyph texture. */
+static SDL_Renderer *g_font_ren = NULL; /* Renderer owning the glyph texture. */
 
+/* Load the generated atlas into ren. Returns zero on success, -1 on failure;
+ * replaces any font texture previously owned by this renderer. */
 static int text_init(SDL_Renderer *ren)
 {
     if (g_font_tex && g_font_ren == ren) return 0;
     if (g_font_tex) SDL_DestroyTexture(g_font_tex);
     g_font_tex = NULL;
     g_font_ren = ren;
-    Uint32 *px = malloc((size_t)FONT_ATLAS_W * FONT_ATLAS_H * 4);
-    if (!px) return -1;
-    for (int i = 0; i < FONT_ATLAS_W * FONT_ATLAS_H; i++) {
-        const unsigned b = font_atlas[i >> 1];
-        const unsigned a = ((i & 1) ? (b & 15) : (b >> 4)) * 17;
-        px[i] = (a << 24) | 0xFFFFFFu;             /* white, the colour comes from the mod */
+    Uint32 *pixels = malloc((size_t)FONT_ATLAS_W * FONT_ATLAS_H * 4); /* Expanded white ARGB glyph coverage. */
+    if (!pixels) return -1;
+    size_t offset = 0; /* Next output pixel in the decompressed atlas. */
+    for (size_t index = 0; index < sizeof(font_atlas); index += 2) { /* Count/value pair offset in the generated RLE stream. */
+        const unsigned value = font_atlas[index + 1]; /* Two packed four-bit alpha samples. */
+        for (unsigned run = 0; run < font_atlas[index]; ++run) { /* Packed-byte position within this repeated run. */
+            pixels[offset++] = (((value >> 4) * 17) << 24) | 0xFFFFFFu;
+            pixels[offset++] = (((value & 15) * 17) << 24) | 0xFFFFFFu;
+        }
     }
     g_font_tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, FONT_ATLAS_W, FONT_ATLAS_H);
     if (g_font_tex) {
-        SDL_UpdateTexture(g_font_tex, NULL, px, FONT_ATLAS_W * 4);
+        SDL_UpdateTexture(g_font_tex, NULL, pixels, FONT_ATLAS_W * 4);
         SDL_SetTextureBlendMode(g_font_tex, SDL_BLENDMODE_BLEND);
-        /* DPI-aware windows scale the 720p UI; nearest sampling made glyphs look
-         * pixelated/garbled after per-monitor DPI (v0.7.13). Linear matches gear/disc. */
         SDL_SetTextureScaleMode(g_font_tex, SDL_ScaleModeLinear);
     }
-    free(px);
+    free(pixels);
     return g_font_tex ? 0 : -1;
 }
 
-static int text_width(const char *s, int px, int bold)
+/* Find code in the sorted atlas. Unknown scalars use a visible question mark;
+ * returns the shared glyph-table index without modifying renderer state. */
+static int textGlyph(uint32_t code)
 {
-    int w = 0;
-    for (; *s; s++) {
-        const int c = (unsigned char)*s;
-        if (c < FONT_FIRST || c > FONT_LAST) continue;
-        w += font_glyphs[bold][c - FONT_FIRST][2];
+    int low = 0, high = FONT_COUNT; /* Half-open glyph index range to search. */
+    while (low < high) {
+        const int middle = low + (high - low) / 2; /* Glyph index at the search midpoint. */
+        if (font_codes[middle] < code) low = middle + 1;
+        else high = middle;
     }
-    return w * px / font_px[bold];
+    return low < FONT_COUNT && font_codes[low] == code ? low : '?' - 32;
 }
 
-/* align: 0 left, 1 centre, 2 right; y is the top of the line */
+/* Measure NUL-terminated UTF-8 s at px pixels, using weight bold (0 or 1).
+ * Returns horizontal advance in pixels; malformed input uses a fallback glyph. */
+static int text_width(const char *s, int px, int bold)
+{
+    int width = 0; /* Sum of advances in the atlas font's native pixels. */
+    while (*s) width += font_glyphs[bold][textGlyph(sftUtf8Next(&s))][4];
+    return width * px / font_px[bold];
+}
+
+/* Draw UTF-8 s on ren at x,y with em size px and weight bold (0 or 1).
+ * col is the ink colour; align is 0 left, 1 centre or 2 right. No return value;
+ * does nothing if the atlas could not be loaded. */
 static void text_draw(SDL_Renderer *ren, const char *s, int x, int y, int px, int bold, SDL_Color col, int align)
 {
     if (!g_font_tex) return;
     if (align) x -= text_width(s, px, bold) / (align == 1 ? 2 : 1);
     SDL_SetTextureColorMod(g_font_tex, col.r, col.g, col.b);
     SDL_SetTextureAlphaMod(g_font_tex, col.a);
-    const int fp = font_px[bold];
-    int pen = x * fp;                               /* in font pixels * px, to keep fractions */
-    for (; *s; s++) {
-        const int c = (unsigned char)*s;
-        if (c < FONT_FIRST || c > FONT_LAST) continue;
-        const unsigned short *g = font_glyphs[bold][c - FONT_FIRST];
-        if (c != ' ') {
-            SDL_Rect src = { g[0], font_top[bold], g[1], font_h[bold] };
-            SDL_Rect dst = { pen / fp, y, g[1] * px / fp + 1, font_h[bold] * px / fp };
-            SDL_RenderCopy(ren, g_font_tex, &src, &dst);
+    const int fontSize = font_px[bold]; /* Native em size for this atlas weight. */
+    int pen = x * fontSize; /* Horizontal pen position, retaining fractional scaled advances. */
+    while (*s) {
+        const uint32_t code = sftUtf8Next(&s); /* Next Unicode scalar from the UI string. */
+        const unsigned short *glyph = font_glyphs[bold][textGlyph(code)]; /* Atlas rectangle and advance for this scalar. */
+        if (code != ' ') {
+            SDL_Rect source = { glyph[0], glyph[1], glyph[2], glyph[3] }; /* Glyph coverage rectangle in the atlas. */
+            SDL_Rect destination = { pen / fontSize, y, glyph[2] * px / fontSize + 1, glyph[3] * px / fontSize }; /* Scaled rectangle on screen. */
+            SDL_RenderCopy(ren, g_font_tex, &source, &destination);
         }
-        pen += g[2] * px;
+        pen += glyph[4] * px;
     }
 }
 

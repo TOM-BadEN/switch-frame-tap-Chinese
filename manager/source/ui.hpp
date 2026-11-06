@@ -13,6 +13,7 @@
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include "../../common/utf8.h"
 
 namespace ui {
 
@@ -61,6 +62,36 @@ namespace ui {
         if (g_glyphs) { TTF_CloseFont(g_glyphs); g_glyphs = nullptr; }
     }
 
+    /* Wrap UTF-8 text using font metrics, including Chinese without spaces.
+     * text is the source, font is the active system font, maxWidth is pixels.
+     * Returns text with explicit line breaks; never splits encoded characters. */
+    inline std::string wrapText(const std::string &text, TTF_Font *font, int maxWidth) {
+        std::string result; /* Output consumed by SDL_ttf's wrapped renderer. */
+        const char *start = text.c_str(); /* First byte of the current line. */
+        while (*start) {
+            const char *cursor = start; /* Boundary of the next candidate scalar. */
+            size_t length = 0, lastBreak = 0; /* Accepted line length and last word/CJK boundary, in bytes. */
+            while (*cursor && *cursor != '\n') {
+                const char *next = cursor; /* First byte after this character. */
+                const uint32_t code = sftUtf8Next(&next); /* Character determining break opportunities. */
+                const size_t candidate = static_cast<size_t>(next - start); /* Candidate line length in bytes. */
+                const std::string line(start, candidate); /* NUL-terminated candidate for font measurement. */
+                int width = 0, height = 0; /* Candidate extent reported by the active font. */
+                TTF_SizeUTF8(font, line.c_str(), &width, &height);
+                if (length && width > maxWidth) { if (lastBreak) { length = lastBreak; } break; }
+                length = candidate;
+                if (code == ' ' || code >= 0x2E80) { lastBreak = code == ' ' ? static_cast<size_t>(cursor - start) : length; }
+                cursor = next;
+            }
+            result.append(start, length);
+            start += length;
+            if (*start == '\n') { ++start; }
+            while (*start == ' ') { ++start; }
+            if (*start) { result += '\n'; }
+        }
+        return result;
+    }
+
     inline const CachedText *Render(const std::string &s, int size, SDL_Color c, int wrap = 0, bool glyph = false) {
         if (s.empty()) { return nullptr; }
         TTF_Font *f = glyph ? g_glyphs : g_font[size];
@@ -75,7 +106,8 @@ namespace ui {
         }
         SDL_Color opaque = c;
         opaque.a = 255;
-        SDL_Surface *surf = wrap > 0 ? TTF_RenderUTF8_Blended_Wrapped(f, s.c_str(), opaque, static_cast<Uint32>(wrap)) : TTF_RenderUTF8_Blended(f, s.c_str(), opaque);
+        const std::string wrapped = wrap > 0 ? wrapText(s, f, wrap) : s; /* Explicit Chinese/word breaks for rendering and cached height. */
+        SDL_Surface *surf = wrap > 0 ? TTF_RenderUTF8_Blended_Wrapped(f, wrapped.c_str(), opaque, static_cast<Uint32>(wrap)) : TTF_RenderUTF8_Blended(f, s.c_str(), opaque);
         if (surf == nullptr) { return nullptr; }
         CachedText t = { SDL_CreateTextureFromSurface(g_ren, surf), surf->w, surf->h };
         SDL_FreeSurface(surf);

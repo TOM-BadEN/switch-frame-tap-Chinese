@@ -65,7 +65,7 @@ static int pad_open_index(int i)
     g_pad = c;
     g_pad_id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(g_pad));
     const char *n = SDL_GameControllerName(g_pad);
-    snprintf(g_pad_name, sizeof(g_pad_name), "%s", n ? n : "Controller");
+    snprintf(g_pad_name, sizeof(g_pad_name), "%s", n ? n : "控制器");
     fprintf(stderr, "controller: %s\n", g_pad_name);
     return 1;
 }
@@ -165,7 +165,7 @@ static void pad_mouse_grab(int on, const char *why)
     if (on == g_mouse_cap) return;
     if (on) {
         if (!g_pad_test && SDL_SetRelativeMouseMode(SDL_TRUE) != 0) {
-            hud_toast("Could not take the mouse");
+            hud_toast("无法捕获鼠标");
             return;
         }
     } else if (!g_pad_test) SDL_SetRelativeMouseMode(SDL_FALSE);
@@ -312,10 +312,10 @@ static int pad_key_reserved(int sc)
 
 static void pad_bound(int dev, int slot, int cell, int code)
 {
-    char b[96];
+    char b[256];
     const int was = dev == 1 ? pcfg_set_key(slot, cell, code) : pcfg_set_ctl(slot, code);
-    if (was >= 0) snprintf(b, sizeof(b), "%s now %s (was %s)", ps_name[slot], dev == 1 ? pcfg_key_name(code) : pcfg_ct_name(code), ps_name[was]);
-    else snprintf(b, sizeof(b), "%s now %s", ps_name[slot], dev == 1 ? pcfg_key_name(code) : pcfg_ct_name(code));
+    if (was >= 0) snprintf(b, sizeof(b), "%s 已改为 %s（原为 %s）", ps_name[slot], dev == 1 ? pcfg_key_name(code) : pcfg_ct_name(code), ps_name[was]);
+    else snprintf(b, sizeof(b), "%s 已改为 %s", ps_name[slot], dev == 1 ? pcfg_key_name(code) : pcfg_ct_name(code));
     hud_toast(b);
     prefs_save();
     g_pcap_dev = 0;
@@ -358,7 +358,7 @@ static int pad_event(const SDL_Event *e)
             if (sc == SDL_SCANCODE_ESCAPE) { g_pcap_dev = 0; g_pad_redraw = 1; return 2; }
             if (sc == SDL_SCANCODE_DELETE || sc == SDL_SCANCODE_BACKSPACE) { pad_bind_clear(g_pcap_dev, g_pcap_slot, g_pcap_cell); return 2; }
             if (g_pcap_dev == 1) {
-                if (pad_key_reserved(sc)) hud_toast("That key is the viewer's - pick another");
+                if (pad_key_reserved(sc)) hud_toast("此键为客户端保留快捷键，请选择其他键");
                 else pad_bound(1, g_pcap_slot, g_pcap_cell, sc);
             }
             return 2;
@@ -383,7 +383,7 @@ static int pad_event(const SDL_Event *e)
         case SDL_MOUSEBUTTONUP: pad_mouse_button(e->button.button, 0); return 2;
         case SDL_MOUSEWHEEL: pad_mouse_wheel(e->wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -e->wheel.y : e->wheel.y); return 2;
         case SDL_KEYDOWN:
-            if (e->key.keysym.scancode == SDL_SCANCODE_F10) { pad_mouse_grab(0, "Mouse is yours again"); return 2; }
+            if (e->key.keysym.scancode == SDL_SCANCODE_F10) { pad_mouse_grab(0, "已释放鼠标"); return 2; }
             break;
         }
     }
@@ -508,31 +508,31 @@ static void pad_stop(void)
 /* the page's lines under the three switches */
 static const char *pad_status(char *b, size_t n)
 {
-    if (!g_pad_send) snprintf(b, n, "Off");
-    else if (!g_pad_inited || !g_pad_m) snprintf(b, n, "Controllers are not available");
-    else if (!g_pad) snprintf(b, n, "No controller connected");
-    else if (SDL_AtomicGet(&g_pad_live)) snprintf(b, n, "%s - playing the Switch", g_pad_name);
-    else if (g_usb || g_sock != SOCK_BAD) snprintf(b, n, "%s - turn it on in the Switch app (Beta page)", g_pad_name);
-    else snprintf(b, n, "%s - ready", g_pad_name);
+    if (!g_pad_send) snprintf(b, n, "关闭");
+    else if (!g_pad_inited || !g_pad_m) snprintf(b, n, "手柄支持不可用");
+    else if (!g_pad) snprintf(b, n, "未连接手柄");
+    else if (SDL_AtomicGet(&g_pad_live)) snprintf(b, n, "%s · 正在控制 Switch", g_pad_name);
+    else if (g_usb || g_sock != SOCK_BAD) snprintf(b, n, "%s · 请在 Switch 管理应用的“实验功能”中启用", g_pad_name);
+    else snprintf(b, n, "%s · 就绪", g_pad_name);
     return b;
 }
 
 static const char *pad_kbd_status(char *b, size_t n)
 {
-    if (!g_pad_kbd) snprintf(b, n, "Off - the letter keys are the viewer's shortcuts");
-    else if (SDL_AtomicGet(&g_pad_live)) snprintf(b, n, "Playing the Switch - Esc opens this menu");
-    else if (g_usb || g_sock != SOCK_BAD) snprintf(b, n, "Turn it on in the Switch app (Beta page)");
-    else snprintf(b, n, "Ready");
+    if (!g_pad_kbd) snprintf(b, n, "已关闭，字母键用于客户端快捷键");
+    else if (SDL_AtomicGet(&g_pad_live)) snprintf(b, n, "正在控制 Switch，Esc 打开此菜单");
+    else if (g_usb || g_sock != SOCK_BAD) snprintf(b, n, "请在 Switch 管理应用的“实验功能”中启用");
+    else snprintf(b, n, "就绪");
     return b;
 }
 
 static const char *pad_mouse_status(char *b, size_t n)
 {
-    if (!g_pad_mouse) snprintf(b, n, "Off - the mouse works the viewer");
-    else if (g_mouse_cap) snprintf(b, n, "The Switch has the mouse - F10 lets go");
-    else if (SDL_AtomicGet(&g_pad_live)) snprintf(b, n, "Click the picture to use it - F10 lets go");
-    else if (g_usb || g_sock != SOCK_BAD) snprintf(b, n, "Turn it on in the Switch app (Beta page)");
-    else snprintf(b, n, "Ready");
+    if (!g_pad_mouse) snprintf(b, n, "已关闭，鼠标用于操作客户端");
+    else if (g_mouse_cap) snprintf(b, n, "鼠标正在控制 Switch，F10 释放");
+    else if (SDL_AtomicGet(&g_pad_live)) snprintf(b, n, "点击画面开始控制，F10 释放");
+    else if (g_usb || g_sock != SOCK_BAD) snprintf(b, n, "请在 Switch 管理应用的“实验功能”中启用");
+    else snprintf(b, n, "就绪");
     return b;
 }
 
@@ -543,12 +543,12 @@ static void pad_pressed_text(char *b, size_t n)
     b[0] = 0;
     for (int i = 0; i < PS_NBTN && o + 24 < n; i++)
         if ((g_pad_pv.b >> ps_hidbit[i]) & 1) o += (size_t)snprintf(b + o, n - o, "%s%s", o ? "   " : "", ps_name[i]);
-    const struct { const char *nm; int32_t x, y; } st[2] = { { "Left stick", g_pad_pv.lx, g_pad_pv.ly }, { "Right stick", g_pad_pv.rx, g_pad_pv.ry } };
+    const struct { const char *nm; int32_t x, y; } st[2] = { { "左摇杆", g_pad_pv.lx, g_pad_pv.ly }, { "右摇杆", g_pad_pv.rx, g_pad_pv.ry } };
     for (int i = 0; i < 2 && o + 40 < n; i++) {
         const int x = st[i].x > 9000 ? 1 : st[i].x < -9000 ? -1 : 0, y = st[i].y > 9000 ? 1 : st[i].y < -9000 ? -1 : 0;
         if (!x && !y) continue;
-        o += (size_t)snprintf(b + o, n - o, "%s%s %s%s%s", o ? "   " : "", st[i].nm, y > 0 ? "up" : y < 0 ? "down" : "",
-                              x && y ? " " : "", x > 0 ? "right" : x < 0 ? "left" : "");
+        o += (size_t)snprintf(b + o, n - o, "%s%s %s%s%s", o ? "   " : "", st[i].nm, y > 0 ? "上" : y < 0 ? "下" : "",
+                              x && y ? " " : "", x > 0 ? "右" : x < 0 ? "左" : "");
     }
 }
 
@@ -556,7 +556,7 @@ static void act_pad_kbd(int on)
 {
     g_pad_kbd = on != 0;
     prefs_save();
-    hud_toast(g_pad_kbd ? "Keyboard plays the Switch - Esc opens Settings" : "Keyboard shortcuts are back");
+    hud_toast(g_pad_kbd ? "键盘正在控制 Switch，Esc 打开设置" : "已恢复键盘快捷键");
     fprintf(stderr, "\nkeyboard to the Switch %s\n", g_pad_kbd ? "on" : "off");
 }
 
@@ -564,7 +564,7 @@ static void act_pad_send(int on)
 {
     g_pad_send = on != 0;
     prefs_save();
-    hud_toast(g_pad_send ? "Controller plays the Switch" : "Controller stays on this computer");
+    hud_toast(g_pad_send ? "手柄正在控制 Switch" : "手柄仅用于本机");
     fprintf(stderr, "\ncontroller to the Switch %s\n", g_pad_send ? "on" : "off");
 }
 
@@ -573,7 +573,7 @@ static void act_pad_mouse(int on)
     g_pad_mouse = on != 0;
     if (!g_pad_mouse) pad_mouse_grab(0, NULL);
     prefs_save();
-    hud_toast(g_pad_mouse ? "Mouse plays the Switch - click the picture" : "The mouse works the viewer");
+    hud_toast(g_pad_mouse ? "鼠标控制 Switch，请点击画面" : "鼠标用于操作客户端");
     fprintf(stderr, "\nmouse to the Switch %s\n", g_pad_mouse ? "on" : "off");
 }
 
@@ -584,5 +584,5 @@ static void act_pad_defaults(int what)     /* 0 keyboard, 1 mouse, 2 controller 
     else { pcfg_defaults_ctl(); pcfg_defaults_ctl_options(); }
     g_pcap_dev = 0;
     prefs_save();
-    hud_toast("Back to the defaults");
+    hud_toast("已恢复默认设置");
 }

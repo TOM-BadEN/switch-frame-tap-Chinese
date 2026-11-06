@@ -87,10 +87,10 @@ cp "$B/SwitchFrameTap.exe" "$PKG/"
 cp "$W/sdl2/x86_64-w64-mingw32/bin/SDL2.dll" "$W/libusb/MinGW64/dll/libusb-1.0.dll" "$PKG/"
 [ ${#FF_DLLS[@]} -gt 0 ] && cp "${FF_DLLS[@]}" "$PKG/"
 cp "$REPO/LICENSE" "$PKG/licenses/switch-frame-tap-GPL-2.0.txt"
+cp "$REPO/tools/raw-recv/fonts/HarmonyOS-Sans-LICENSE.txt" "$PKG/licenses/HarmonyOS-Sans-LICENSE.txt"
 cp "$REPO/third_party/fsr1/license.txt" "$PKG/licenses/AMD-FidelityFX-FSR1-MIT.txt"; cp "$REPO/third_party/nis/licence.txt" "$PKG/licenses/NVIDIA-Image-Scaling-MIT.txt"   # v0.7.11: the upscalers' shaders
 cp "$W/sdl2/LICENSE.txt" "$PKG/licenses/SDL2-zlib.txt"
 if [ ${#FF_DLLS[@]} -gt 0 ]; then cp "$W/ffmpeg/LICENSE.txt" "$PKG/licenses/FFmpeg-LGPL.txt"; else cp "$MIN/COPYING.LGPLv2.1" "$PKG/licenses/FFmpeg-LGPL-2.1.txt"; fi
-cp /usr/share/doc/fonts-dejavu-core/copyright "$PKG/licenses/DejaVu-fonts.txt"
 cp /usr/share/common-licenses/LGPL-2.1 "$PKG/licenses/libusb-LGPL-2.1.txt"
 if [ ${#FF_DLLS[@]} -gt 0 ]; then
 FF_NOTE="  avcodec-62.dll,
@@ -117,9 +117,8 @@ It ships these libraries, unmodified, as DLLs:
 
 $FF_NOTE
 
-The menu's text is drawn from DejaVu Sans and DejaVu Sans Bold glyphs built
-into SwitchFrameTap.exe (Bitstream Vera licence, DejaVu changes public domain;
-DejaVu-fonts.txt).
+The interface uses HarmonyOS Sans SC by Huawei Device Co., Ltd.
+The original font licence is in HarmonyOS-Sans-LICENSE.txt.
 TXT
 cat > "$PKG/README-WINDOWS.txt" <<'TXT'
 Switch Frame Tap - Windows viewer

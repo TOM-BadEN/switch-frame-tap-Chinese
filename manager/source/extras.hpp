@@ -66,7 +66,7 @@ namespace extras {
     /* GET url into body (when non-null) or file */
     inline bool Get(const char *url, std::string *body, FILE *file, const Progress *p, const char *what, std::string *err) {
         CURL *c = curl_easy_init();
-        if (c == nullptr) { *err = "could not start a download"; return false; }
+        if (c == nullptr) { *err = "无法开始下载"; return false; }
         detail::Sink sink = { body, file, p, what };
         curl_slist *hdr = curl_slist_append(nullptr, "Accept: application/vnd.github+json");
         curl_easy_setopt(c, CURLOPT_URL, url);
@@ -89,12 +89,12 @@ namespace extras {
         curl_easy_cleanup(c);
         if (rc == CURLE_OK) { return true; }
         if (rc == CURLE_COULDNT_RESOLVE_HOST || rc == CURLE_COULDNT_CONNECT || rc == CURLE_OPERATION_TIMEDOUT) {
-            *err = "GitHub could not be reached - is the Switch online?";
+            *err = "无法连接 GitHub，请检查主机网络";
         } else if (rc == CURLE_ABORTED_BY_CALLBACK) {
-            *err = "cancelled";
+            *err = "已取消";
         } else if (code != 0) {
             char b[96];
-            std::snprintf(b, sizeof(b), "GitHub answered %ld", code);
+            std::snprintf(b, sizeof(b), "GitHub 返回状态码 %ld", code);
             *err = b;
         } else {
             *err = curl_easy_strerror(rc);
@@ -131,10 +131,10 @@ namespace extras {
         if (pre) { std::snprintf(url, sizeof(url), "https://api.github.com/repos/%s/releases?per_page=15", repo); }
         else { std::snprintf(url, sizeof(url), "https://api.github.com/repos/%s/releases/latest", repo); }
         std::string body;
-        if (!Get(url, &body, nullptr, p, "Asking GitHub for the latest version", err)) { return false; }
+        if (!Get(url, &body, nullptr, p, "正在查询 GitHub 最新版本", err)) { return false; }
         json_error_t je;
         json_t *root = json_loads(body.c_str(), 0, &je);
-        if (root == nullptr) { *err = "GitHub's answer could not be read"; return false; }
+        if (root == nullptr) { *err = "无法读取 GitHub 的响应"; return false; }
         json_t *rel = root;
         if (pre) {
             rel = nullptr;
@@ -148,7 +148,7 @@ namespace extras {
         }
         const bool found = rel != nullptr && PickAsset(rel, match, out);
         json_decref(root);
-        if (!found) { *err = "its latest release has no file this app knows how to install"; }
+        if (!found) { *err = "最新版本中没有可供本应用安装的文件"; }
         return found;
     }
 
@@ -175,7 +175,7 @@ namespace extras {
      * are skipped, and so is any file skip() names (v0.7.14) */
     inline bool Unzip(const char *zip, const Progress *p, int *written, int *kept, std::string *err, bool (*skip)(const char *) = nullptr) {
         unzFile z = unzOpen(zip);
-        if (z == nullptr) { *err = "the download is not a zip file"; return false; }
+        if (z == nullptr) { *err = "下载的文件不是 ZIP 压缩包"; return false; }
         unz_global_info gi = {};
         unzGetGlobalInfo(z, &gi);
         static char buf[0x10000];
@@ -185,7 +185,7 @@ namespace extras {
             char name[512];
             unz_file_info fi = {};
             if (unzGetCurrentFileInfo(z, &fi, name, sizeof(name), nullptr, 0, nullptr, 0) != UNZ_OK) { ok = false; break; }
-            if (p != nullptr && *p && !(*p)("Unpacking", gi.number_entry ? static_cast<double>(idx) / gi.number_entry : -1.0)) { *err = "cancelled"; ok = false; break; }
+            if (p != nullptr && *p && !(*p)("正在解压", gi.number_entry ? static_cast<double>(idx) / gi.number_entry : -1.0)) { *err = "已取消"; ok = false; break; }
             const size_t nl = std::strlen(name);
             if (nl == 0 || std::strstr(name, "..") != nullptr) { continue; }
             const std::string dest = std::string("sdmc:/") + name;
@@ -193,17 +193,17 @@ namespace extras {
             if (std::strchr(name, '/') == nullptr) { continue; }
             if ((Keep(name) && Exists(dest.c_str())) || (skip != nullptr && skip(name))) { ++*kept; continue; }
             MakeParents(dest);
-            if (unzOpenCurrentFile(z) != UNZ_OK) { *err = std::string("could not read ") + name; ok = false; break; }
+            if (unzOpenCurrentFile(z) != UNZ_OK) { *err = std::string("无法读取：") + name; ok = false; break; }
             const std::string part = dest + ".part";
             FILE *f = std::fopen(part.c_str(), "wb");
-            if (f == nullptr) { unzCloseCurrentFile(z); *err = std::string("could not write ") + name; ok = false; break; }
+            if (f == nullptr) { unzCloseCurrentFile(z); *err = std::string("无法写入：") + name; ok = false; break; }
             int n;
             while ((n = unzReadCurrentFile(z, buf, sizeof(buf))) > 0) {
                 if (std::fwrite(buf, 1, static_cast<size_t>(n), f) != static_cast<size_t>(n)) { n = -1; break; }
             }
             std::fclose(f);
             unzCloseCurrentFile(z);
-            if (n < 0 || !Replace(part, dest)) { std::remove(part.c_str()); *err = std::string("could not write ") + name; ok = false; break; }
+            if (n < 0 || !Replace(part, dest)) { std::remove(part.c_str()); *err = std::string("无法写入：") + name; ok = false; break; }
             ++*written;
         }
         unzClose(z);
@@ -260,7 +260,7 @@ namespace extras {
 
     /* the latest release of t, downloaded and in place; *done says what */
     inline bool Install(const Tool &t, const Progress &p, std::string *done, std::string *err) {
-        if (!NetUp()) { *err = "the network could not be started"; return false; }
+        if (!NetUp()) { *err = "无法启动网络"; return false; }
         Release rel;
         if (!Latest(t.repo, t.match, &rel, &p, err)) { return false; }
         mkdir("sdmc:/config", 0777);
@@ -268,9 +268,9 @@ namespace extras {
         mkdir("sdmc:/config/switch-frame-tap/downloads", 0777);
         const std::string tmp = std::string("sdmc:/config/switch-frame-tap/downloads/") + rel.name + ".part";
         FILE *f = std::fopen(tmp.c_str(), "wb");
-        if (f == nullptr) { *err = "could not write to the SD card"; return false; }
+        if (f == nullptr) { *err = "无法写入 SD 卡"; return false; }
         char what[96];
-        std::snprintf(what, sizeof(what), "Downloading %s %s", t.name, rel.tag.c_str());
+        std::snprintf(what, sizeof(what), "正在下载 %s %s", t.name, rel.tag.c_str());
         const bool got = Get(rel.url.c_str(), nullptr, f, &p, what, err);
         std::fclose(f);
         if (!got) { std::remove(tmp.c_str()); return false; }
@@ -280,15 +280,15 @@ namespace extras {
             MakeParents(t.single_dest);
             ok = Replace(tmp, t.single_dest);
             written = ok ? 1 : 0;
-            if (!ok) { *err = "could not move the download into place"; }
+            if (!ok) { *err = "无法将下载文件移至目标位置"; }
         } else {
             ok = Unzip(tmp.c_str(), &p, &written, &kept, err);
             std::remove(tmp.c_str());
         }
         if (ok) {
             char b[160];
-            std::snprintf(b, sizeof(b), "%s %s installed (%d file%s%s)%s", t.name, rel.tag.c_str(), written, written == 1 ? "" : "s",
-                          kept ? ", your settings kept" : "", t.sysmodule ? " - restart the console to start it" : "");
+            std::snprintf(b, sizeof(b), "已安装 %s %s（%d 个文件%s%s）%s", t.name, rel.tag.c_str(), written, "",
+                          kept ? "，已保留设置" : "", t.sysmodule ? "，重启主机后生效" : "");
             *done = b;
         }
         return ok;
@@ -313,21 +313,21 @@ namespace extras {
 
     /* 1: rel is newer than current; 0: up to date; -1: *err says why not */
     inline int CheckUpdate(const char *current, bool pre, Release *rel, const Progress &p, std::string *err) {
-        if (!NetUp()) { *err = "the network could not be started"; return -1; }
+        if (!NetUp()) { *err = "无法启动网络"; return -1; }
         if (!Latest(SelfRepo, SelfAsset, rel, &p, err, pre)) { return -1; }
         return sft_version_cmp(rel->tag.c_str(), current) > 0 ? 1 : 0;
     }
 
     inline bool InstallUpdate(const Release &rel, const Progress &p, std::string *done, std::string *err) {
-        if (!NetUp()) { *err = "the network could not be started"; return false; }
+        if (!NetUp()) { *err = "无法启动网络"; return false; }
         mkdir("sdmc:/config", 0777);
         mkdir("sdmc:/config/switch-frame-tap", 0777);
         mkdir("sdmc:/config/switch-frame-tap/downloads", 0777);
         const std::string tmp = std::string("sdmc:/config/switch-frame-tap/downloads/") + rel.name + ".part";
         FILE *f = std::fopen(tmp.c_str(), "wb");
-        if (f == nullptr) { *err = "could not write to the SD card"; return false; }
+        if (f == nullptr) { *err = "无法写入 SD 卡"; return false; }
         char what[96];
-        std::snprintf(what, sizeof(what), "Downloading Switch Frame Tap %s", rel.tag.c_str());
+        std::snprintf(what, sizeof(what), "正在下载 Switch Frame Tap %s", rel.tag.c_str());
         const bool got = Get(rel.url.c_str(), nullptr, f, &p, what, err);
         std::fclose(f);
         if (!got) { std::remove(tmp.c_str()); return false; }
@@ -336,7 +336,7 @@ namespace extras {
         std::remove(tmp.c_str());
         if (ok) {
             char b[160];
-            std::snprintf(b, sizeof(b), "Switch Frame Tap %s installed (%d files) - restart the console to finish", rel.tag.c_str(), written);
+            std::snprintf(b, sizeof(b), "已安装 Switch Frame Tap %s（%d 个文件），请重启主机完成更新", rel.tag.c_str(), written);
             *done = b;
         }
         return ok;

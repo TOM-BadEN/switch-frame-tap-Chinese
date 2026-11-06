@@ -56,7 +56,7 @@ enum { H_NONE, H_SETTINGS, H_CLOSE, H_BACKDROP, H_CONN, H_IP, H_FULL, H_VSYNC, H
        H_PIC, H_PIC_RESET, H_SOUND, H_REC, H_PANEL, H_FSR_SHARP, H_SUPPORT, H_SCROLL,
        H_WIN_MIN, H_WIN_MAX, H_WIN_CLOSE, H_UPD, H_UPD_BETA, H_UPD_AUTO, H_PIN, H_REC1, H_PAD, H_PADKB,
        H_PADMENU, H_PADBACK, H_PADMOUSE, H_PADTAB, H_PADBIND, H_PADMBTN, H_PADMODE, H_PADINV, H_PADSL, H_PADCHANGE,
-       H_PADSWAP, H_PADRESET };
+       H_PADSWAP, H_PADRESET, H_FONT_LICENSE };
 
 typedef struct { SDL_FRect r; int id, arg, window_space; } ui_hit_t;
 static ui_hit_t g_ui_hits[256];
@@ -102,37 +102,55 @@ static int ui_focused(int id, int arg)
 
 static SDL_Color ui_alpha(SDL_Color c, int a) { c.a = (Uint8)a; return c; }
 
-/* text that does not fit: cut with "..." */
+/* Fit UTF-8 s within maxw pixels, drawing an ellipsis when necessary.
+ * ren, x/y, px, bold, c and align have text_draw's meanings. No return value. */
 static void ui_text_fit(SDL_Renderer *ren, const char *s, int x, int y, int px, int bold, SDL_Color c, int align, int maxw)
 {
-    char b[256];
-    snprintf(b, sizeof(b), "%s", s);
-    if (text_width(b, px, bold) > maxw) {
-        size_t n = strlen(b);
-        while (n > 3 && text_width(b, px, bold) > maxw) { b[--n] = 0; b[n - 1] = '.'; b[n - 2] = '.'; b[n - 3] = '.'; }
+    char buffer[512]; /* Complete UTF-8 prefix plus optional three-dot ellipsis. */
+    size_t length = sftUtf8Prefix(s, sizeof(buffer) - 4); /* Byte length that leaves space for dots and NUL. */
+    memcpy(buffer, s, length);
+    buffer[length] = 0;
+    if (s[length] || text_width(buffer, px, bold) > maxw) {
+        for (;;) {
+            memcpy(buffer + length, "...", 4);
+            if (text_width(buffer, px, bold) <= maxw || length == 0) break;
+            --length;
+            while (length && ((unsigned char)buffer[length] & 0xC0) == 0x80) --length;
+        }
     }
-    text_draw(ren, b, x, y, px, bold, c, align);
+    if (text_width(buffer, px, bold) <= maxw) text_draw(ren, buffer, x, y, px, bold, c, align);
 }
 
-/* lines broken at spaces to fit maxw; returns the height used. align as text_draw: 0 = x is the left edge, 1 = x is the centre */
+/* Wrap UTF-8 s at whitespace or character boundaries to maxw pixels. Drawing
+ * parameters follow text_draw; lh is line spacing. Returns total height used.
+ * With ren == NULL only measures, allowing callers to reserve enough space. */
 static int ui_wrap_a(SDL_Renderer *ren, const char *s, int x, int y, int px, int bold, SDL_Color c, int maxw, int lh, int align)
 {
-    char line[256];
-    int used = 0;
+    char line[512]; /* One complete UTF-8 line and its terminator. */
+    int used = 0; /* Height occupied by previously drawn lines, in UI pixels. */
     while (*s) {
-        size_t n = 0, last_space = 0;
-        while (s[n] && n < sizeof(line) - 1) {
-            memcpy(line, s, n + 1); line[n + 1] = 0;
-            if (text_width(line, px, bold) > maxw && last_space) break;
-            if (s[n] == ' ') last_space = n;
-            n++;
+        const char *cursor = s; /* Next character boundary to try for this line. */
+        size_t length = 0, space = 0; /* Accepted prefix and most recent ASCII space in bytes. */
+        while (*cursor && *cursor != '\n') {
+            const char *next = cursor; /* Boundary after the candidate character. */
+            const uint32_t code = sftUtf8Next(&next); /* Scalar used to identify word/CJK break opportunities. */
+            const size_t candidate = (size_t)(next - s); /* Byte length including this candidate. */
+            if (candidate >= sizeof(line)) break;
+            memcpy(line, s, candidate); line[candidate] = 0;
+            if (length && text_width(line, px, bold) > maxw) {
+                if (space) length = space;
+                break;
+            }
+            length = candidate;
+            if (code == ' ' || code >= 0x2E80) space = code == ' ' ? (size_t)(cursor - s) : length;
+            cursor = next;
         }
-        size_t take = s[n] ? (last_space ? last_space : n) : n;
-        memcpy(line, s, take); line[take] = 0;
-        text_draw(ren, line, x, y + used, px, bold, c, align);
+        memcpy(line, s, length); line[length] = 0;
+        if (ren) text_draw(ren, line, x, y + used, px, bold, c, align);
         used += lh;
-        s += take;
-        while (*s == ' ') s++;
+        s += length;
+        if (*s == '\n') ++s;
+        while (*s == ' ') ++s;
     }
     return used;
 }
@@ -280,10 +298,10 @@ static void ui_gear_button(SDL_Renderer *ren, float xr, float y, float d, SDL_Co
     }
     if (hov) {
         const int px = d >= 38.f ? 14 : d >= 32.f ? 13 : 12;
-        const float tw = text_width("Settings", px, 1) + d * 0.48f;
+        const float tw = text_width("设置", px, 1) + d * 0.48f;
         const float th = d * 0.62f, ty = y + (d - th) * 0.5f;
         ui_rrect(ren, x - tw - d * 0.19f, ty, tw, th, th * 0.5f, (SDL_Color){ 21, 24, 30, 230 });
-        text_draw(ren, "Settings", (int)(x - d * 0.19f - tw * 0.5f), (int)(ty + th * 0.18f), px, 1, UI_INK, 1);
+        text_draw(ren, "设置", (int)(x - d * 0.19f - tw * 0.5f), (int)(ty + th * 0.18f), px, 1, UI_INK, 1);
     }
     ui_chrome_hit(x, y, d, id);
 }
@@ -305,10 +323,10 @@ static void ui_pad_button(SDL_Renderer *ren, float x, float y, float d, SDL_Colo
     }
     if (hov) {
         const int px = d >= 38.f ? 14 : d >= 32.f ? 13 : 12;
-        const float tw = text_width("Controller", px, 1) + d * 0.48f;
+        const float tw = text_width("控制器", px, 1) + d * 0.48f;
         const float th = d * 0.62f, ty = y + (d - th) * 0.5f, tx = x + d + d * 0.19f;
         ui_rrect(ren, tx, ty, tw, th, th * 0.5f, (SDL_Color){ 21, 24, 30, 230 });
-        text_draw(ren, "Controller", (int)(tx + tw * 0.5f), (int)(ty + th * 0.18f), px, 1, UI_INK, 1);
+        text_draw(ren, "控制器", (int)(tx + tw * 0.5f), (int)(ty + th * 0.18f), px, 1, UI_INK, 1);
     }
     ui_chrome_hit(x, y, d, id);
 }
@@ -534,7 +552,7 @@ static void ui_label(SDL_Renderer *ren, float x, float y, float h, const char *l
     }
 }
 
-static const char *const ui_hud_names[HUD_MODES] = { "Off", "FPS", "Graphs", "Full" };
+static const char *const ui_hud_names[HUD_MODES] = { "关闭", "FPS", "图表", "详细" };
 
 #include "padui.h"
 
@@ -570,9 +588,9 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
     float top = y0 + head_h, bottom = y0 + ph - foot_h;
     if (bottom < top + ui_d(120)) { head_h = ui_d(48); foot_h = ui_d(4); top = y0 + head_h; bottom = y0 + ph - foot_h; }
     if (bottom <= top + ui_d(48)) {
-        text_draw(ren, g_ui_page == 1 ? "Controller" : "Settings", (int)cx, (int)(y0 + ui_d(16)), ui_px(20), 1, UI_INK, 0);
-        ui_button(ren, xr, 0, y0 + ui_d(14), "Close", UI_SURF2, UI_INK, H_CLOSE, 0, 1);
-        text_draw(ren, "Resize the window larger to use this", (int)(x0 + pw * 0.5f), (int)(y0 + ph * 0.5f), ui_px(15), 0, UI_DIM, 1);
+        text_draw(ren, g_ui_page == 1 ? "控制器" : "设置", (int)cx, (int)(y0 + ui_d(16)), ui_px(20), 1, UI_INK, 0);
+        ui_button(ren, xr, 0, y0 + ui_d(14), "关闭", UI_SURF2, UI_INK, H_CLOSE, 0, 1);
+        text_draw(ren, "请放大窗口以使用此功能", (int)(x0 + pw * 0.5f), (int)(y0 + ph * 0.5f), ui_px(15), 0, UI_DIM, 1);
         return;
     }
 
@@ -598,58 +616,58 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
     /* ---- left column (or full width): connection + display ---- */
     if (g_ui_page != 1) {
         float y = y_l, cxi = cx_l, cwi = col_w, xri = xr_l;
-        ui_section(ren, cxi, &y, "CONNECTION");
+        ui_section(ren, cxi, &y, "连接");
         {
-            static const char *const conn[] = { "USB", "Network" };
+            static const char *const conn[] = { "USB", "网络" };
             const float h = ui_d(44), gap_y = ui_d(6);
             ui_row(H_CONN, 0, y, h);
-            ui_label(ren, cxi, y, h, "Connection", NULL, ui_focused(H_CONN, 0), cwi);
+            ui_label(ren, cxi, y, h, "连接方式", NULL, ui_focused(H_CONN, 0), cwi);
             ui_seg(ren, xri, 0, y + gap_y, conn, 2, g_conn == CONN_NET, H_CONN, 14, cwi * 0.55f);
             y += h + gap_y;
             if (g_conn == CONN_NET) {
                 char sub[96];
-                if (g_sock != SOCK_BAD && net_peer_for_menu()[0]) snprintf(sub, sizeof(sub), "Connected to %s", net_peer_for_menu());
-                else snprintf(sub, sizeof(sub), "%s", g_last_ip[0] ? g_last_ip : "Found by itself on the network");
+                if (g_sock != SOCK_BAD && net_peer_for_menu()[0]) snprintf(sub, sizeof(sub), "已连接至 %s", net_peer_for_menu());
+                else snprintf(sub, sizeof(sub), "%s", g_last_ip[0] ? g_last_ip : "已在局域网中自动发现");
                 ui_row(H_IP, 0, y, h);
-                ui_label(ren, cxi, y, h, "Switch address", sub, ui_focused(H_IP, 0), cwi);
-                ui_button(ren, xri, 0, y + gap_y, "Type IP", UI_SURF3, UI_INK, H_IP, 0, act_ip_possible());
+                ui_label(ren, cxi, y, h, "Switch 地址", sub, ui_focused(H_IP, 0), cwi);
+                ui_button(ren, xri, 0, y + gap_y, "输入 IP", UI_SURF3, UI_INK, H_IP, 0, act_ip_possible());
                 y += h + gap_y;
             }
         }
 
-        ui_section(ren, cxi, &y, "DISPLAY");
+        ui_section(ren, cxi, &y, "显示");
         {
             const float h = ui_d(48), gap_y = ui_d(4), tog_y = ui_d(12);
             ui_row(H_FULL, 0, y, h);
-            ui_label(ren, cxi, y, h, "Fullscreen", "F11 / double / middle. FS: Alt-pan, Ctrl-wheel zoom, Ctrl-click reset", ui_focused(H_FULL, 0), cwi);
+            ui_label(ren, cxi, y, h, "全屏", "F11 / 双击 / 中键；全屏：Alt 拖动，Ctrl 滚轮缩放，Ctrl 单击复位", ui_focused(H_FULL, 0), cwi);
             ui_toggle(ren, xri, y + tog_y, g_ui_win && (SDL_GetWindowFlags(g_ui_win) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0, H_FULL, 1);
             y += h + gap_y;
             ui_row(H_VSYNC, 0, y, h);
-            ui_label(ren, cxi, y, h, "Vsync", g_vsync ? "Smooth, no tearing (adds input lag)" : "Off: snappier UI + lower latency (may tear)", ui_focused(H_VSYNC, 0), cwi);
+            ui_label(ren, cxi, y, h, "垂直同步", g_vsync ? "画面平滑、无撕裂（增加输入延迟）" : "关闭：响应更快、延迟更低（可能撕裂）", ui_focused(H_VSYNC, 0), cwi);
             ui_toggle(ren, xri, y + tog_y, g_vsync, H_VSYNC, 1);
             y += h + gap_y;
             ui_row(H_ASPECT, 0, y, h);
-            ui_label(ren, cxi, y, h, "Lock aspect ratio", g_lock_aspect ? "Window stays 16:9 while resizing (A)" : "Free resize; picture letterboxed (A)", ui_focused(H_ASPECT, 0), cwi);
+            ui_label(ren, cxi, y, h, "锁定宽高比", g_lock_aspect ? "调整窗口时保持 16:9（A）" : "自由调整窗口，画面保持比例并留黑边（A）", ui_focused(H_ASPECT, 0), cwi);
             ui_toggle(ren, xri, y + tog_y, g_lock_aspect, H_ASPECT, 1);
             y += h + gap_y;
             ui_row(H_CHROMELESS, 0, y, h);
-            ui_label(ren, cxi, y, h, "Borderless window", g_chromeless ? "No title bar; drag the picture to move (B)" : "Normal window frame (B)", ui_focused(H_CHROMELESS, 0), cwi);
+            ui_label(ren, cxi, y, h, "无边框窗口", g_chromeless ? "隐藏标题栏，拖动画面移动窗口（B）" : "显示标准窗口边框（B）", ui_focused(H_CHROMELESS, 0), cwi);
             ui_toggle(ren, xri, y + tog_y, g_chromeless, H_CHROMELESS, 1);
             y += h + gap_y;
             ui_row(H_HWDEC, 0, y, h);
             char dec[64];
-            snprintf(dec, sizeof(dec), "Now: %s", g_dec_mode && g_dec_mode[0] ? g_dec_mode : (g_hwdec ? "the graphics card" : "the CPU"));
+            snprintf(dec, sizeof(dec), "当前：%s", g_dec_mode && g_dec_mode[0] ? g_dec_mode : (g_hwdec ? "GPU" : "CPU"));
 #if defined(__APPLE__)
-            ui_label(ren, cxi, y, h, "Hardware decoding (beta)", dec, ui_focused(H_HWDEC, 0), cwi);
+            ui_label(ren, cxi, y, h, "硬件解码（实验功能）", dec, ui_focused(H_HWDEC, 0), cwi);
 #else
-            ui_label(ren, cxi, y, h, "Hardware decoding", dec, ui_focused(H_HWDEC, 0), cwi);
+            ui_label(ren, cxi, y, h, "硬件解码", dec, ui_focused(H_HWDEC, 0), cwi);
 #endif
             ui_toggle(ren, xri, y + tog_y, g_hwdec, H_HWDEC, 1);
             y += h + gap_y;
             /* Dedicated blurb under the title for every mode (not the HUD "-" fallback). */
             char why[120];
             if (g_upscaler == UP_OFF)
-                snprintf(why, sizeof(why), "No upscaling (U)");
+                snprintf(why, sizeof(why), "不使用画面放大（U）");
             else if (g_upscaler == UP_FSR)
                 snprintf(why, sizeof(why), "AMD FidelityFX Super Resolution (U)");
             else if (g_upscaler == UP_NIS)
@@ -669,9 +687,9 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
             const float h_ups = ui_d(94);
             ui_row(H_UPS, 0, y, h_ups);
             if (ui_focused(H_UPS, 0)) ui_rrect(ren, cxi - ui_d(12), y - 2, cwi + ui_d(24), h_ups + 4, ui_d(10), UI_SURF2);
-            text_draw(ren, "Upscaling", (int)cxi, (int)(y + ui_d(2)), ui_px(17), 0, UI_INK, 0);
+            text_draw(ren, "画面放大", (int)cxi, (int)(y + ui_d(2)), ui_px(17), 0, UI_INK, 0);
             ui_text_fit(ren, why, (int)cxi, (int)(y + ui_d(24)), ui_px(13), 0, UI_DIM, 0, (int)cwi);
-            static const char *const ups[] = { "Off", "FSR 1", "NIS", "RTX VSR" };
+            static const char *const ups[] = { "关闭", "FSR 1", "NIS", "RTX VSR" };
             ui_seg(ren, xri, 0, y + ui_d(48), ups, UP_COUNT, g_upscaler, H_UPS, 13, cwi);
             y += h_ups + gap_y;
 #ifdef __APPLE__
@@ -679,7 +697,7 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
                 const float sh = ui_d(52), ty = y + ui_d(34);
                 ui_row(H_FSR_SHARP, 0, y, sh);
                 if (ui_focused(H_FSR_SHARP, 0)) ui_rrect(ren, cxi - ui_d(12), y - 2, cwi + ui_d(24), sh + 4, ui_d(10), UI_SURF2);
-                text_draw(ren, "FSR sharpness", (int)cxi, (int)(y + ui_d(4)), ui_px(16), 0, UI_INK, 0);
+                text_draw(ren, "FSR 锐化强度", (int)cxi, (int)(y + ui_d(4)), ui_px(16), 0, UI_INK, 0);
                 char value[16]; snprintf(value, sizeof(value), "%d%%", g_fsr_sharpness);
                 text_draw(ren, value, (int)xri, (int)(y + ui_d(4)), ui_px(15), 1, UI_ACC, 2);
                 const float vx = cxi + cwi * g_fsr_sharpness / 100.0f;
@@ -693,8 +711,8 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
             const float h_hud = ui_d(74);
             ui_row(H_HUD, 0, y, h_hud);
             if (ui_focused(H_HUD, 0)) ui_rrect(ren, cxi - ui_d(12), y - 2, cwi + ui_d(24), h_hud + 4, ui_d(10), UI_SURF2);
-            text_draw(ren, "Stats overlay", (int)cxi, (int)(y + ui_d(4)), ui_px(17), 0, UI_INK, 0);
-            text_draw(ren, "O or F3", (int)xri, (int)(y + ui_d(7)), ui_px(13), 0, UI_DIM, 2);
+            text_draw(ren, "性能统计", (int)cxi, (int)(y + ui_d(4)), ui_px(17), 0, UI_INK, 0);
+            text_draw(ren, "O 或 F3", (int)xri, (int)(y + ui_d(7)), ui_px(13), 0, UI_DIM, 2);
             ui_seg(ren, xri, 0, y + ui_d(32), ui_hud_names, HUD_MODES, g_hud, H_HUD, 13, cwi);
             y += h_hud + gap_y;
         }
@@ -706,8 +724,8 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
         float y = use_cols == 2 ? y_r : y_l;
         float cxi = use_cols == 2 ? cx_r : cx_l, cwi = col_w, xri = use_cols == 2 ? xr_r : xr_l;
 
-        ui_section(ren, cxi, &y, "PICTURE");
-        if (!pic_neutral()) ui_button(ren, xri, 0, y - ui_d(36), "Reset", UI_SURF3, UI_INK, H_PIC_RESET, 0, 1);
+        ui_section(ren, cxi, &y, "画面");
+        if (!pic_neutral()) ui_button(ren, xri, 0, y - ui_d(36), "重置", UI_SURF3, UI_INK, H_PIC_RESET, 0, 1);
         for (int r = 0; r < PIC_N; r++) {
             const float h = ui_d(52);
             ui_row(H_PIC, r, y, h);
@@ -729,61 +747,61 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
             y += h + ui_d(2);
         }
 
-        ui_section(ren, cxi, &y, "SOUND");
+        ui_section(ren, cxi, &y, "声音");
         {
             const float h = ui_d(48);
             ui_row(H_SOUND, 0, y, h);
-            ui_label(ren, cxi, y, h, "Game sound", g_mute ? "Muted (M)" : "On (M mutes)", ui_focused(H_SOUND, 0), cwi);
+            ui_label(ren, cxi, y, h, "游戏声音", g_mute ? "已静音（M）" : "已开启（M 静音）", ui_focused(H_SOUND, 0), cwi);
             ui_toggle(ren, xri, y + ui_d(12), !g_mute, H_SOUND, 1);
             y += h + ui_d(4);
         }
 
         /* v0.7.20: the controller, keyboard and mouse have their own page */
-        ui_section(ren, cxi, &y, "CONTROLLER");
+        ui_section(ren, cxi, &y, "控制器");
         {
             const float h = ui_d(48);
             char sub[160];
             ui_row(H_PADMENU, 0, y, h);
             if (ui_focused(H_PADMENU, 0)) ui_rrect(ren, cxi - ui_d(12), y - 2, cwi + ui_d(24), h + 4, ui_d(10), UI_SURF2);
-            ui_text_fit(ren, "Play the Switch from here", (int)cxi, (int)(y + h / 2 - ui_d(20)), ui_px(17), 0, UI_INK, 0, (int)(cwi - ui_d(96)));
+            ui_text_fit(ren, "通过客户端操作 Switch", (int)cxi, (int)(y + h / 2 - ui_d(20)), ui_px(17), 0, UI_INK, 0, (int)(cwi - ui_d(96)));
             ui_text_fit(ren, ui_pad_summary(sub, sizeof(sub)), (int)cxi, (int)(y + h / 2 + ui_d(2)), ui_px(13), 0, UI_DIM, 0, (int)(cwi - ui_d(96)));
-            ui_button(ren, xri, 0, y + ui_d(8), "Open", UI_SURF3, UI_INK, H_PADMENU, 0, 1);
+            ui_button(ren, xri, 0, y + ui_d(8), "打开", UI_SURF3, UI_INK, H_PADMENU, 0, 1);
             y += h + ui_d(4);
         }
 
-        ui_section(ren, cxi, &y, "RECORDING");
+        ui_section(ren, cxi, &y, "录制");
         {
             const float h = ui_d(48);
             char rs[200], sub[200];
             rec_status(rs, sizeof(rs));
-            snprintf(sub, sizeof(sub), "%s", rec_active() ? rs + 5 : "MP4 with sound (R)");
+            snprintf(sub, sizeof(sub), "%s", rec_active() ? rs + 5 : "MP4（含声音，R）");
             ui_row(H_REC, 0, y, h);
-            ui_label(ren, cxi, y, h, "Record", sub, ui_focused(H_REC, 0), cwi);
-            if (rec_active()) ui_button(ren, xri, 0, y + ui_d(8), "Stop", UI_BAD, (SDL_Color){ 30, 8, 8, 255 }, H_REC, 0, 1);
-            else ui_button(ren, xri, 0, y + ui_d(8), "Start", UI_SURF3, UI_INK, H_REC, 0, 1);
+            ui_label(ren, cxi, y, h, "录制", sub, ui_focused(H_REC, 0), cwi);
+            if (rec_active()) ui_button(ren, xri, 0, y + ui_d(8), "停止", UI_BAD, (SDL_Color){ 30, 8, 8, 255 }, H_REC, 0, 1);
+            else ui_button(ren, xri, 0, y + ui_d(8), "开始", UI_SURF3, UI_INK, H_REC, 0, 1);
             y += h + ui_d(2);
             /* v0.7.19: the v0.7.18 size lock, now a choice (off by default) */
             ui_row(H_REC1, 0, y, h);
-            ui_label(ren, cxi, y, h, "One file per recording",
-                     g_rec_one_file ? "Keeps the size it started at; other sizes are scaled" : "A new file when the picture size changes; never scaled",
+            ui_label(ren, cxi, y, h, "每次录制仅保存一个文件",
+                     g_rec_one_file ? "保持录制开始时的分辨率，其他分辨率将缩放" : "分辨率变化时新建文件，保留原始分辨率",
                      ui_focused(H_REC1, 0), cwi);
             ui_toggle(ren, xri, y + ui_d(12), g_rec_one_file, H_REC1, 1);
             y += h + ui_d(2);
             const char *dir = rec_dir_for_menu();
             if (dir[0]) {
                 char line[1100];
-                snprintf(line, sizeof(line), "Saved in %s", dir);
+                snprintf(line, sizeof(line), "保存至 %s", dir);
                 ui_text_fit(ren, line, (int)cxi, (int)y, ui_px(13), 0, UI_FAINT, 0, (int)cwi);
                 y += ui_d(24);
             }
         }
         /* v0.7.14: updates from GitHub (update.h) */
-        ui_section(ren, cxi, &y, "UPDATES");
+        ui_section(ren, cxi, &y, "更新");
         {
             const float h = ui_d(48);
             char sb[220];
             const int us = upd_state();
-            const char *btn = us == UPD_FOUND ? "Update" : us == UPD_READY ? "Restart" : (us == UPD_ERROR && g_upd.failed_update) ? "Try again" : "Check";
+            const char *btn = us == UPD_FOUND ? "更新" : us == UPD_READY ? "重启" : (us == UPD_ERROR && g_upd.failed_update) ? "重试" : "检查";
             const int can = us != UPD_CHECKING && us != UPD_GETTING && us != UPD_UNSUPPORTED;
             ui_row(H_UPD, 0, y, h);
             ui_label(ren, cxi, y, h, "Switch Frame Tap " SFT_VERSION, upd_status(sb, sizeof(sb)), ui_focused(H_UPD, 0), cwi);
@@ -791,19 +809,24 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
                       us == UPD_FOUND || us == UPD_READY ? (SDL_Color){ 8, 20, 30, 255 } : UI_INK, H_UPD, 0, can);
             y += h + ui_d(4);
             ui_row(H_UPD_BETA, 0, y, h);
-            ui_label(ren, cxi, y, h, "Include betas", g_upd_betas ? "Offers test versions too" : "Only full releases", ui_focused(H_UPD_BETA, 0), cwi);
+            ui_label(ren, cxi, y, h, "接收测试版更新", g_upd_betas ? "包含测试版本" : "仅正式版", ui_focused(H_UPD_BETA, 0), cwi);
             ui_toggle(ren, xri, y + ui_d(12), g_upd_betas, H_UPD_BETA, us != UPD_UNSUPPORTED);
             y += h + ui_d(4);
             ui_row(H_UPD_AUTO, 0, y, h);
-            ui_label(ren, cxi, y, h, "Check at start-up", "Looks for a new version when the viewer opens", ui_focused(H_UPD_AUTO, 0), cwi);
+            ui_label(ren, cxi, y, h, "启动时检查更新", "打开客户端时检查新版本", ui_focused(H_UPD_AUTO, 0), cwi);
             ui_toggle(ren, xri, y + ui_d(12), g_upd_check, H_UPD_AUTO, us != UPD_UNSUPPORTED);
             y += h + ui_d(4);
         }
 
+        /* Font credit and original licence remain accessible in local builds. */
+        ui_row(H_FONT_LICENSE, 0, y, ui_d(36));
+        ui_button(ren, -1, cxi + cwi / 2, y, "字体：HarmonyOS Sans · 许可", UI_SURF3, UI_DIM, H_FONT_LICENSE, 0, 1);
+        y += ui_d(44);
+
         /* faint support line at the end of this column */
         {
             y += ui_d(18);
-            const char *pre = "Free and open source  -  ", *link = "support the project";
+            const char *pre = "免费开源  ·  ", *link = "支持本项目";
             const int tw = text_width(pre, ui_px(13), 0), lw = text_width(link, ui_px(13), 0);
             text_draw(ren, pre, (int)cxi, (int)y, ui_px(13), 0, UI_FAINT, 0);
             const int hov = ui_in(cxi + tw, y - 2, lw, ui_d(20));
@@ -832,12 +855,12 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
     SDL_FRect hb = { x0 + 1, y0, pw - 1, top - y0 }, fb = { x0 + 1, bottom, pw - 1, y0 + ph - bottom };
     SDL_RenderFillRectF(ren, &hb);
     SDL_RenderFillRectF(ren, &fb);
-    text_draw(ren, g_ui_page == 1 ? "Controller" : "Settings", (int)cx, (int)(y0 + (head_h >= ui_d(70) ? ui_d(24) : ui_d(14))),
+    text_draw(ren, g_ui_page == 1 ? "控制器" : "设置", (int)cx, (int)(y0 + (head_h >= ui_d(70) ? ui_d(24) : ui_d(14))),
               head_h >= ui_d(70) ? ui_px(24) : ui_px(20), 1, UI_INK, 0);
     {
         const float by = y0 + (head_h >= ui_d(70) ? ui_d(22) : ui_d(12));
-        const float cw = ui_button(ren, xr, 0, by, "Close", UI_SURF2, UI_INK, H_CLOSE, 0, 1);
-        if (g_ui_page == 1) ui_button(ren, xr - cw - ui_d(8), 0, by, "Settings", UI_SURF2, UI_INK, H_PADBACK, 0, 1);
+        const float cw = ui_button(ren, xr, 0, by, "关闭", UI_SURF2, UI_INK, H_CLOSE, 0, 1);
+        if (g_ui_page == 1) ui_button(ren, xr - cw - ui_d(8), 0, by, "设置", UI_SURF2, UI_INK, H_PADBACK, 0, 1);
     }
     SDL_SetRenderDrawColor(ren, UI_LINE.r, UI_LINE.g, UI_LINE.b, UI_LINE.a);
     SDL_FRect l1 = { x0 + 1, top - 1, pw - 1, 1 }, l2 = { x0 + 1, bottom, pw - 1, 1 };
@@ -846,36 +869,36 @@ static void ui_drawer(SDL_Renderer *ren, float x0, float y0, float pw, float ph)
     if (show_footer && g_ui_page == 1) {
         float kx = cx;
         if (g_pcap_dev) {
-            text_draw(ren, g_pcap_dev == 1 ? "Press the key you want" : "Press the button you want", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 1, UI_ACC, 0);
-            kx += text_width(g_pcap_dev == 1 ? "Press the key you want" : "Press the button you want", ui_px(13), 1) + ui_d(14);
+            text_draw(ren, g_pcap_dev == 1 ? "请按下要绑定的键盘按键" : "请按下要绑定的手柄按键", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 1, UI_ACC, 0);
+            kx += text_width(g_pcap_dev == 1 ? "请按下要绑定的键盘按键" : "请按下要绑定的手柄按键", ui_px(13), 1) + ui_d(14);
             kx += ui_key(ren, kx, bottom + ui_d(12), "Esc") + ui_d(6);
-            text_draw(ren, "cancel", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
-            kx += text_width("cancel", ui_px(13), 0) + ui_d(14);
+            text_draw(ren, "取消", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+            kx += text_width("取消", ui_px(13), 0) + ui_d(14);
             kx += ui_key(ren, kx, bottom + ui_d(12), "Delete") + ui_d(6);
-            text_draw(ren, "clear", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+            text_draw(ren, "清除", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
         } else {
             kx += ui_key(ren, kx, bottom + ui_d(12), "Esc") + ui_d(6);
-            text_draw(ren, "close", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
-            kx += text_width("close", ui_px(13), 0) + ui_d(14);
+            text_draw(ren, "关闭", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+            kx += text_width("关闭", ui_px(13), 0) + ui_d(14);
             kx += ui_key(ren, kx, bottom + ui_d(12), "Up/Down") + ui_d(6);
-            text_draw(ren, "move", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
-            kx += text_width("move", ui_px(13), 0) + ui_d(14);
+            text_draw(ren, "移动", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+            kx += text_width("移动", ui_px(13), 0) + ui_d(14);
             kx += ui_key(ren, kx, bottom + ui_d(12), "Enter") + ui_d(6);
-            text_draw(ren, "change", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
-            kx += text_width("change", ui_px(13), 0) + ui_d(14);
+            text_draw(ren, "更改", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+            kx += text_width("更改", ui_px(13), 0) + ui_d(14);
             kx += ui_key(ren, kx, bottom + ui_d(12), "Delete") + ui_d(6);
-            text_draw(ren, "clear", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+            text_draw(ren, "清除", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
         }
     } else if (show_footer) {
         float kx = cx;
         kx += ui_key(ren, kx, bottom + ui_d(12), "Esc") + ui_d(6);
-        text_draw(ren, "close", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
-        kx += text_width("close", ui_px(13), 0) + ui_d(14);
+        text_draw(ren, "关闭", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+        kx += text_width("关闭", ui_px(13), 0) + ui_d(14);
         kx += ui_key(ren, kx, bottom + ui_d(12), "Up/Down") + ui_d(6);
-        text_draw(ren, "move", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
-        kx += text_width("move", ui_px(13), 0) + ui_d(14);
+        text_draw(ren, "移动", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+        kx += text_width("移动", ui_px(13), 0) + ui_d(14);
         kx += ui_key(ren, kx, bottom + ui_d(12), "Left/Right") + ui_d(6);
-        text_draw(ren, "change", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
+        text_draw(ren, "更改", (int)kx, (int)(bottom + ui_d(14)), ui_px(13), 0, UI_DIM, 0);
     }
     /* Scrollbar on the right of the content view (works without a mouse wheel). */
     ui_scrollbar(ren, x0 + pw - ui_d(14), top, view_h, g_ui_content_h, &g_ui_scroll);
@@ -1049,57 +1072,57 @@ static void menu_draw(SDL_Renderer *ren)
     /* what it is waiting for */
     const char *head = "", *l1 = "", *l2 = "";
     SDL_Color hc = UI_ACC;
-    char errline[200];
+    char errline[512];
     switch (g_menu_state) {
     case MENU_WAITING:
         if (conn_for_menu()) {
-            head = "Looking for the Switch";
-            l1 = "Set Connection to Network in the Switch Frame Tap app on the Switch too.";
+            head = "正在查找 Switch";
+            l1 = "请将 Switch 上的 Switch Frame Tap 连接方式也设为“网络”。";
             if (!ip_edit_for_menu()) { snprintf(errline, sizeof(errline), "%s", net_status_for_menu()); l2 = errline; }
         } else {
-            head = "Waiting for the Switch";
-            l1 = "Connect it to this PC with a USB-C cable, in handheld mode.";
-            l2 = "Playing docked? Choose Network.";
+            head = "等待 Switch 连接";
+            l1 = "请在掌机模式下，用 USB-C 数据线连接这台电脑。";
+            l2 = "使用底座模式？请选择网络连接。";
         }
         break;
     case MENU_NODRIVER:
         hc = UI_WARN;
 #ifdef _WIN32
-        head = "The Switch needs its USB driver";
-        l1 = "Install WinUSB for it once with Zadig - see README-WINDOWS.txt.";
+        head = "Switch 需要安装 USB 驱动";
+        l1 = "请使用 Zadig 安装 WinUSB 驱动，详见 README-WINDOWS.txt。";
 #elif defined(__APPLE__)
-        head = "The Switch cannot be opened";
-        l1 = "Is another program using it (another viewer, OBS)? Close it, or plug the cable in again.";
+        head = "无法访问 Switch";
+        l1 = "请关闭可能占用设备的其他客户端或 OBS，或重新插拔数据线。";
 #else
-        head = "The Switch cannot be opened";
-        l1 = "Install the USB rule (70-switch-frame-tap.rules) - see the README.";
+        head = "无法访问 Switch";
+        l1 = "请安装 USB 访问规则（70-switch-frame-tap.rules），详见说明文档。";
 #endif
         snprintf(errline, sizeof(errline), "(%s)", g_menu_err);
         l2 = errline;
         break;
     case MENU_WRONG_DEVICE:
         hc = UI_WARN;
-        head = "Another USB program has the Switch";
+        head = "Switch 的 USB 被其他程序占用";
         snprintf(errline, sizeof(errline),
-                 "The PC sees \"%s\". Remove or disable it on the SD card, install Switch Frame Tap, and reboot the console.",
+                 "电脑检测到“%s”。请在 SD 卡中移除或禁用该程序，安装 Switch Frame Tap 后重启主机。",
                  g_menu_other[0] ? g_menu_other : "SysDVR");
         l1 = errline;
-        l2 = "Or set Connection to Network in the Switch Frame Tap app and use Network here (Tab).";
+        l2 = "也可在 Switch Frame Tap 应用中选择网络连接，并在此切换为网络（Tab）。";
         break;
     case MENU_PAUSED:
         hc = UI_GOOD;
-        head = "Connected - the game is not on screen";
-        l1 = "Go back to the game, or start one, and the picture returns here.";
-        l2 = "Nothing? Check that streaming is on in the overlay or the app on the Switch.";
+        head = "已连接，当前未显示游戏";
+        l1 = "返回游戏或启动游戏后，即可恢复画面。";
+        l2 = "仍无画面？请在 Switch 的悬浮菜单或管理应用中确认串流已开启。";
         break;
     default:
         hc = UI_GOOD;
-        head = net_peer_for_menu()[0] ? "Connected over the network" : "Connected";
-        l1 = "Start a game on the Switch and the picture appears here.";
-        l2 = "Nothing? Check that streaming is on in the overlay or the app on the Switch.";
+        head = net_peer_for_menu()[0] ? "已通过网络连接" : "已连接";
+        l1 = "在 Switch 上启动游戏即可显示画面。";
+        l2 = "仍无画面？请在 Switch 的悬浮菜单或管理应用中确认串流已开启。";
         break;
     }
-    char st_head[64], st_detail[120];
+    char st_head[128], st_detail[384];
     uint32_t st_reason = 0;
     if ((g_menu_state == MENU_CONNECTED || g_menu_state == MENU_PAUSED) &&
         status_for_menu(st_head, sizeof(st_head), st_detail, sizeof(st_detail), &st_reason)) {
@@ -1108,7 +1131,7 @@ static void menu_draw(SDL_Renderer *ren)
         l2 = "";
         hc = (st_reason == 1 || st_reason == 2 || st_reason == 10) ? UI_GOOD : UI_WARN;
     }
-    char title[96], rest[96], first[200];
+    char title[256], rest[256], first[512];
     snprintf(title, sizeof(title), "%s", head);
     {
         char *dash = strstr(title, " - ");
@@ -1195,7 +1218,7 @@ static void menu_draw(SDL_Renderer *ren)
 
     /* USB / Network - in document flow, not pinned to the bottom */
     {
-        static const char *const conn[] = { "USB", "Network" };
+        static const char *const conn[] = { "USB", "网络" };
         if (ip_edit_for_menu()) {
             const float fw = ui_d(280) < pw - pad * 2 ? ui_d(280) : pw - pad * 2;
             ui_rrect(ren, cx - fw / 2, y - 2, fw, ui_d(36), ui_d(10), UI_ACC);
@@ -1204,13 +1227,13 @@ static void menu_draw(SDL_Renderer *ren)
             snprintf(ipl, sizeof(ipl), "%s%s", ip_edit_for_menu(), ((SDL_GetTicks() / 500) & 1) ? "_" : " ");
             text_draw(ren, ipl, (int)(cx - fw / 2 + ui_d(14)), (int)(y + ui_d(6)), ui_px(16), 0, UI_INK, 0);
             y += ui_d(40);
-            text_draw(ren, "Enter to connect, Esc to cancel", (int)cx, (int)y, ui_px(12), 0, UI_DIM, 1);
+            text_draw(ren, "Enter 连接，Esc 取消", (int)cx, (int)y, ui_px(12), 0, UI_DIM, 1);
             y += ui_d(28);
         } else {
             ui_seg(ren, -1, cx, y, conn, 2, conn_for_menu(), H_CONN, 14, pw - pad * 2);
             y += ui_d(40);
             if (conn_for_menu() && act_ip_possible()) {
-                ui_button(ren, -1, cx, y, "Type the Switch's IP", (SDL_Color){ 0, 0, 0, 0 }, UI_ACC, H_IP, 0, 1);
+                ui_button(ren, -1, cx, y, "输入 Switch 的 IP", (SDL_Color){ 0, 0, 0, 0 }, UI_ACC, H_IP, 0, 1);
                 y += ui_d(40);
             }
         }
@@ -1221,10 +1244,10 @@ static void menu_draw(SDL_Renderer *ren)
         const int us = upd_state();
         if (us == UPD_FOUND || us == UPD_GETTING || us == UPD_READY || (us == UPD_ERROR && g_upd.failed_update)) {
             char lb[96];
-            if (us == UPD_FOUND) snprintf(lb, sizeof(lb), "Update to %s", g_upd.tag);
-            else if (us == UPD_GETTING) snprintf(lb, sizeof(lb), "Downloading %s...", g_upd.tag);
-            else if (us == UPD_READY) snprintf(lb, sizeof(lb), "Restart to use %s", g_upd.tag);
-            else snprintf(lb, sizeof(lb), "Update failed - try again");
+            if (us == UPD_FOUND) snprintf(lb, sizeof(lb), "更新至 %s", g_upd.tag);
+            else if (us == UPD_GETTING) snprintf(lb, sizeof(lb), "正在下载 %s…", g_upd.tag);
+            else if (us == UPD_READY) snprintf(lb, sizeof(lb), "重启后使用 %s", g_upd.tag);
+            else snprintf(lb, sizeof(lb), "更新失败，请重试");
             y += ui_d(4);
             ui_button(ren, -1, cx, y, lb, us == UPD_ERROR ? UI_SURF3 : UI_ACC, us == UPD_ERROR ? UI_WARN : (SDL_Color){ 8, 20, 30, 255 }, H_UPD, 0, us != UPD_GETTING);
             y += ui_d(40);
@@ -1237,7 +1260,7 @@ static void menu_draw(SDL_Renderer *ren)
     y += ui_d(12);
     {
         struct { const char *k, *what; } hints[] = {
-            { "Esc", "Settings" }, { "F11", "Fullscreen" }, { "R", "Record" }, { "Tab", "USB / Network" }
+            { "Esc", "设置" }, { "F11", "全屏" }, { "R", "录制" }, { "Tab", "USB / 网络" }
         };
         float widths[4], gap = ui_d(16), total = 0;
         for (int i = 0; i < 4; i++) {
@@ -1286,10 +1309,10 @@ static void menu_draw(SDL_Renderer *ren)
         const char *dir = rec_dir_for_menu();
         if (dir[0]) {
             char line[1100];
-            snprintf(line, sizeof(line), "Recordings: %s", dir);
+            snprintf(line, sizeof(line), "录像：%s", dir);
             ui_text_fit(ren, line, (int)ui_d(16), oh - (int)ui_d(28), ui_px(12), 0, UI_FAINT, 0, ow > 40 ? ow - 32 : 200);
         }
-        if (g_mute) text_draw(ren, "Sound muted (M)", ow - (int)ui_d(16), oh - (int)ui_d(28), ui_px(12), 0, UI_WARN, 2);
+        if (g_mute) text_draw(ren, "已静音（M）", ow - (int)ui_d(16), oh - (int)ui_d(28), ui_px(12), 0, UI_WARN, 2);
         if (rec_active()) {
             char rs[200];
             rec_status(rs, sizeof(rs));
@@ -1391,6 +1414,7 @@ static void ui_change(SDL_Window *win, SDL_Renderer *ren, int id, int arg, int d
     }
     case H_SOUND: act_mute(!g_mute); break;
     case H_REC: if (d == 0) act_record(win); break;
+    case H_FONT_LICENSE: if (d == 0) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "HarmonyOS Sans · 字体许可", g_fontLicense, win); break;
     case H_UPD: if (d == 0) act_update(); break;
     case H_UPD_BETA: g_upd_betas = !g_upd_betas; prefs_save(); if (upd_state() == UPD_LATEST || upd_state() == UPD_FOUND) upd_check(); break;
     case H_UPD_AUTO: g_upd_check = !g_upd_check; prefs_save(); break;
@@ -1516,6 +1540,7 @@ static int ui_event(SDL_Window *win, SDL_Renderer *ren, const SDL_Event *e)
             case H_PIC_RESET: g_pic = pic_default; prefs_save(); break;
             case H_SOUND: act_mute(!h->arg); break;
             case H_REC: act_record(win); break;
+            case H_FONT_LICENSE: SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "HarmonyOS Sans · 字体许可", g_fontLicense, win); break;
             case H_SUPPORT: SDL_OpenURL("https://buymeacoffee.com/papux200"); break;
             case H_UPD: act_update(); break;
             case H_UPD_BETA: g_upd_betas = !g_upd_betas; prefs_save(); if (upd_state() == UPD_LATEST || upd_state() == UPD_FOUND) upd_check(); break;

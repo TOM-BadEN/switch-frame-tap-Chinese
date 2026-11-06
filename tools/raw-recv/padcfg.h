@@ -20,10 +20,10 @@ enum { PS_A, PS_B, PS_X, PS_Y, PS_L3, PS_R3, PS_L, PS_R, PS_ZL, PS_ZR, PS_PLUS, 
 /* the message's bit for each button (HidNpadButton) */
 static const unsigned char ps_hidbit[PS_NBTN] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 19 };
 static const char *const ps_name[PS_N] = {
-    "A", "B", "X", "Y", "Left stick click", "Right stick click", "L", "R", "ZL", "ZR", "+", "-",
-    "D-pad left", "D-pad up", "D-pad right", "D-pad down", "HOME", "Capture",
-    "Left stick up", "Left stick left", "Left stick down", "Left stick right",
-    "Right stick up", "Right stick left", "Right stick down", "Right stick right" };
+    "A", "B", "X", "Y", "按下左摇杆", "按下右摇杆", "L", "R", "ZL", "ZR", "+", "-",
+    "方向键左", "方向键上", "方向键右", "方向键下", "HOME", "Capture",
+    "左摇杆向上", "左摇杆向左", "左摇杆向下", "左摇杆向右",
+    "右摇杆向上", "右摇杆向左", "右摇杆向下", "右摇杆向右" };
 static const char *const ps_key[PS_N] = {      /* the names in viewer.ini */
     "a", "b", "x", "y", "l3", "r3", "l", "r", "zl", "zr", "plus", "minus",
     "dleft", "dup", "dright", "ddown", "home", "capture",
@@ -31,8 +31,8 @@ static const char *const ps_key[PS_N] = {      /* the names in viewer.ini */
 
 enum { CT_TRIG_L = 100, CT_TRIG_R = 101 };   /* a controller code: an SDL button (0..) or one of these */
 enum { PMB_LEFT, PMB_RIGHT, PMB_MIDDLE, PMB_X1, PMB_X2, PMB_WHEEL_UP, PMB_WHEEL_DOWN, PMB_N };
-static const char *const mb_name[PMB_N] = { "Left button", "Right button", "Middle button", "Back button", "Forward button",
-                                           "Wheel up", "Wheel down" };
+static const char *const mb_name[PMB_N] = { "鼠标左键", "鼠标右键", "鼠标中键", "后退键", "前进键",
+                                           "滚轮向上", "滚轮向下" };
 static const char *const mb_key[PMB_N] = { "left", "right", "middle", "x1", "x2", "wup", "wdown" };
 
 static int g_pad_send = 1;                 /* a controller on this computer plays the Switch */
@@ -50,9 +50,9 @@ static int g_bind_ctl[PS_NBTN];            /* SDL_GameControllerButton or CT_TRI
 static int g_bind_mouse[PMB_N];             /* a button (PS_A..PS_CAPTURE), -1 = none */
 
 static const struct { const char *name; int *v; int lo, hi, step, def; const char *unit; } pad_sliders[] = {
-    { "Stick dead zone",  &g_pad_dz,   0, 30, 1, 8,  "%" },
-    { "Trigger press point", &g_pad_trig, 5, 90, 5, 30, "%" },
-    { "Mouse speed",      &g_pad_msens, 5, 100, 5, 50, "" },
+    { "摇杆死区",  &g_pad_dz,   0, 30, 1, 8,  "%" },
+    { "扳机触发阈值", &g_pad_trig, 5, 90, 5, 30, "%" },
+    { "鼠标灵敏度",      &g_pad_msens, 5, 100, 5, 50, "" },
 };
 #define PAD_NSLIDERS 3
 
@@ -61,11 +61,11 @@ static int g_pcap_dev = 0, g_pcap_slot = 0, g_pcap_cell = 0;
 
 static const char *pcfg_ct_name(int code)
 {
-    static const char *const n[] = { "Bottom (A)", "Right (B)", "Left (X)", "Top (Y)", "Back / Share", "Guide / Home", "Start / Options",
-                                     "Left stick", "Right stick", "Left bumper", "Right bumper", "D-pad up", "D-pad down", "D-pad left",
-                                     "D-pad right", "Misc / Share", "Paddle 1", "Paddle 2", "Paddle 3", "Paddle 4", "Touchpad" };
-    if (code == CT_TRIG_L) return "Left trigger";
-    if (code == CT_TRIG_R) return "Right trigger";
+    static const char *const n[] = { "下方（A）", "右侧（B）", "左侧（X）", "上方（Y）", "Back / Share", "Guide / Home", "Start / Options",
+                                     "左摇杆", "右摇杆", "左肩键", "右肩键", "方向键上", "方向键下", "方向键左",
+                                     "方向键右", "Misc / Share", "背键 1", "背键 2", "背键 3", "背键 4", "触摸板" };
+    if (code == CT_TRIG_L) return "左扳机";
+    if (code == CT_TRIG_R) return "右扳机";
     if (code >= 0 && code < (int)(sizeof(n) / sizeof(n[0]))) return n[code];
     return "-";
 }
